@@ -1,22 +1,62 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ImageBackground,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
-
 
 export default function LoginScreen() {
   const router = useRouter();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
 
-  const handleLogin = () => {
-    router.replace('/home');
+  const handleLogin = async () => {
+    if (!username || !password) {
+      setErrorMsg('Please enter both username and password');
+      setModalVisible(true);
+      return;
+    }
+
+    try {
+      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            function: 'app_login',
+            data: { username, password },
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        await AsyncStorage.setItem('login_token', result.login_token);
+        router.push('/home');
+      } else {
+        setErrorMsg(result.message || 'Login failed. Please try again.');
+        setModalVisible(true);
+      }
+    } catch (error) {
+      console.error(error);
+      setErrorMsg('An error occurred. Please try again later.');
+      setModalVisible(true);
+    }
+
+    // router.replace('/home');
   };
 
   return (
@@ -43,12 +83,18 @@ export default function LoginScreen() {
           </View>
         </ImageBackground>
 
-        {/* Overlapping Form */}
+        {/* Login Form */}
         <View style={styles.formContainer}>
           <Text style={styles.welcome}>Welcome back.</Text>
 
           <Text style={styles.label}>Username</Text>
-          <TextInput style={styles.input} placeholder="" placeholderTextColor="#aaa" />
+          <TextInput
+            style={styles.input}
+            placeholder=""
+            placeholderTextColor="#aaa"
+            value={username}
+            onChangeText={setUsername}
+          />
 
           <Text style={styles.label}>Password</Text>
           <TextInput
@@ -56,6 +102,8 @@ export default function LoginScreen() {
             placeholder=""
             secureTextEntry
             placeholderTextColor="#aaa"
+            value={password}
+            onChangeText={setPassword}
           />
 
           <TouchableOpacity>
@@ -68,6 +116,26 @@ export default function LoginScreen() {
 
           <Text style={styles.helperText}>Enter your username and password</Text>
         </View>
+
+        {/* Modal for error */}
+        <Modal
+          transparent
+          visible={modalVisible}
+          animationType="fade"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalText}>{errorMsg}</Text>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </KeyboardAvoidingView>
   );
@@ -124,7 +192,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 30,
     paddingBottom: 40,
-    marginBottom:20,
+    marginBottom: 20,
   },
   welcome: {
     fontSize: 22,
@@ -168,5 +236,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     textAlign: 'center',
-    },
+  }, modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginHorizontal: 30,
+  },
+  modalText: {
+    fontSize: 16,
+    marginBottom: 15,
+    color: '#000',
+    textAlign: 'center',
+  },
+  modalButton: {
+    backgroundColor: '#1c1c1c',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
 });

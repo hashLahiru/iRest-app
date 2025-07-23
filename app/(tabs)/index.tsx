@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
@@ -13,11 +14,43 @@ export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace('/login');
-    }, 2000);
+    const checkLoginStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem('login_token');
+        const last_workday = await AsyncStorage.getItem('last_workday');
 
-    return () => clearTimeout(timer);
+        if (!token) {
+          return router.replace('/login');
+        }
+
+        const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            function: 'check_login_status',
+            data: { login_token: token },
+          }),
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          if (last_workday && new Date(last_workday).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) {
+            return router.replace('/table');
+          }
+          router.replace('/home');
+        } else {
+          router.replace('/login');
+        }
+      } catch (err) {
+        console.error('Login status check failed:', err);
+        router.replace('/login');
+      }
+    };
+
+    checkLoginStatus();
   }, []);
 
   return (
@@ -29,11 +62,10 @@ export default function SplashScreen() {
     >
       <View style={styles.centerContent}>
         <Image
-          source={require('../../assets/images/logo.png')} // Replace with your actual logo path
+          source={require('../../assets/images/logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
-        
         <ActivityIndicator size="large" color="#fff" style={{ marginTop: 24 }} />
       </View>
 
@@ -58,12 +90,6 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     marginBottom: 50,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    letterSpacing: 1.5,
   },
   footer: {
     alignItems: 'center',
