@@ -28,6 +28,8 @@ export default function LoginScreen() {
     }
 
     try {
+      const last_workday = await AsyncStorage.getItem('last_workday');
+
       const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api',
         {
           method: 'POST',
@@ -45,7 +47,11 @@ export default function LoginScreen() {
 
       if (result.status === 'success') {
         await AsyncStorage.setItem('login_token', result.login_token);
-        router.push('/home');
+        if (last_workday && new Date(last_workday).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) {
+          return router.replace('/table');
+        } else {
+          router.push('/home');
+        }
       } else {
         setErrorMsg(result.message || 'Login failed. Please try again.');
         setModalVisible(true);

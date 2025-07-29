@@ -1,26 +1,36 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router, useGlobalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
   TouchableWithoutFeedback,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-
-const initialItems = Array(5).fill({
-  id: 'SEN001',
-  name: 'Schezwan Egg Noodles',
-  qty: 5,
-  rate: 350,
-});
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function BillScreen() {
-  const [items, setItems] = useState(initialItems);
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
+  const params = useGlobalSearchParams();
+
+  console.log(params.cartItems);
+
+  const parsedCartItems = params.cartItems
+    ? JSON.parse(decodeURIComponent(params.cartItems))
+    : [];
+
+  const initialItems = parsedCartItems.map((item) => ({
+    id: item.id,
+    name: `${item.name} (${item.variation})`,
+    qty: item.quantity,
+    rate: item.price
+  }));
+
+  const [items, setItems] = useState(initialItems);
+
 
   const updateQty = (index, delta) => {
     setItems((prev) =>
@@ -33,7 +43,8 @@ export default function BillScreen() {
   const total = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+
       {/* Header (Remains Fixed) */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push('/mainbilling')}>
@@ -56,8 +67,8 @@ export default function BillScreen() {
           {items.map((item, index) => (
             <View key={index} style={styles.tableRow}>
               <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>01. {item.name}</Text>
-                <Text style={styles.itemCode}>{item.id}</Text>
+                <Text style={styles.itemName}>{(index + 1).toString().padStart(2, '0')} . {item.name}</Text>
+                <Text style={styles.itemCode}>{item.foodItemId}</Text>
               </View>
 
               <View style={styles.qtyControls}>
@@ -160,7 +171,7 @@ export default function BillScreen() {
           ))}
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -178,177 +189,37 @@ const NavButton = ({ label, icon, route, active = false, onPress }) => (
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f6f4f2' },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingTop: 30,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1c1c1c',
-    right: 100,
-  },
-
-  itemsContainer: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    paddingBottom: 8,
-    flex: 1,
-  },
-
-  tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ececec',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-  },
-
-  tableHeaderText: {
-    fontWeight: '600',
-    fontSize: 13,
-    color: '#1c1c1c',
-  },
-
-  tableHeaderQty: {
-    fontWeight: '600',
-    fontSize: 13,
-    color: '#1c1c1c',
-    right: 15,
-  },
-
-  tableHeaderTotal: {
-    fontWeight: '600',
-    fontSize: 13,
-    left: 15,
-    color: '#1c1c1c',
-  },
-
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomColor: '#eee',
-    borderBottomWidth: 1,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', paddingTop: 30, paddingBottom: 16, paddingHorizontal: 20, },
+  headerTitle: { fontSize: 20, fontWeight: '600', color: '#1c1c1c', right: 100, },
+  itemsContainer: { backgroundColor: '#fff', borderRadius: 12, paddingBottom: 8, flex: 1, },
+  tableHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ececec', borderTopLeftRadius: 12, borderTopRightRadius: 12, paddingHorizontal: 15, paddingVertical: 10, },
+  tableHeaderText: { fontWeight: '600', fontSize: 13, color: '#1c1c1c', },
+  tableHeaderQty: { fontWeight: '600', fontSize: 13, color: '#1c1c1c', right: 15, },
+  tableHeaderTotal: { fontWeight: '600', fontSize: 13, left: 15, color: '#1c1c1c', },
+  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomColor: '#eee', borderBottomWidth: 1, },
   itemInfo: { width: '25%' },
   itemName: { fontSize: 13, color: '#222' },
   itemCode: { fontSize: 12, color: '#f57c00' },
-
-  qtyControls: {
-    width: '25%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyText: {
-    marginHorizontal: 8,
-    fontWeight: '600',
-    color: '#f57c00',
-  },
-  rateText: {
-    width: '25%',
-    textAlign: 'center',
-    color: '#333',
-  },
-  totalText: {
-    width: '25%',
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#333',
-  },
-
-  summaryBox: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 30,
-    paddingVertical: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 4,
-  },
+  qtyControls: { width: '25%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', },
+  qtyText: { marginHorizontal: 8, fontWeight: '600', color: '#f57c00', },
+  rateText: { width: '25%', textAlign: 'center', color: '#333', },
+  totalText: { width: '25%', textAlign: 'center', fontWeight: '700', color: '#333', },
+  summaryBox: { backgroundColor: '#fff', paddingHorizontal: 30, paddingVertical: 16, },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4, },
   label: { fontSize: 14, color: '#333' },
   amount: { fontSize: 14, color: '#333' },
-  grandLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1c1c1c',
-  },
-  grandTotal: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1c1c1c',
-  },
-
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  holdButton: {
-    flex: 1,
-    backgroundColor: '#ccc',
-    borderRadius: 8,
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginRight: 10,
-  },
+  grandLabel: { fontSize: 16, fontWeight: '700', color: '#1c1c1c', },
+  grandTotal: { fontSize: 16, fontWeight: '700', color: '#1c1c1c', },
+  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, },
+  holdButton: { flex: 1, backgroundColor: '#ccc', borderRadius: 8, alignItems: 'center', paddingVertical: 12, marginRight: 10, },
   holdText: { fontWeight: '600', fontSize: 16, color: '#fff' },
-  payButton: {
-    flex: 1,
-    backgroundColor: '#f57c00',
-    borderRadius: 8,
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
+  payButton: { flex: 1, backgroundColor: '#f57c00', borderRadius: 8, alignItems: 'center', paddingVertical: 12, },
   payText: { fontWeight: '600', fontSize: 16, color: '#fff' },
-
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-  },
+  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#ddd', },
   navItemContainer: { alignItems: 'center' },
   navText: { fontSize: 12, color: '#888', marginTop: 4 },
-
-  /* Quick Menu Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.32)',
-  },
-  quickMenuModal: {
-    backgroundColor: '#fff',
-    paddingVertical: 20,
-    paddingHorizontal: 10,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-  },
-  menuIconBox: {
-    width: '30%',
-    alignItems: 'center',
-    marginVertical: 15,
-  },
-  menuLabel: {
-    marginTop: 6,
-    fontSize: 13,
-    color: '#333',
-    textAlign: 'center',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.32)', },
+  quickMenuModal: { backgroundColor: '#fff', paddingVertical: 20, paddingHorizontal: 10, borderTopLeftRadius: 20, borderTopRightRadius: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', },
+  menuIconBox: { width: '30%', alignItems: 'center', marginVertical: 15, },
+  menuLabel: { marginTop: 6, fontSize: 13, color: '#333', textAlign: 'center', },
 });

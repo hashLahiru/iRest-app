@@ -1,39 +1,100 @@
-import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useGlobalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
   FlatList,
-  TouchableOpacity,
   Image,
   Modal,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-
-const stewards = Array(10).fill({
-  id: 'PCW 001',
-  name: 'Sahan Induwara',
-  count: '03',
-});
 
 const StewardScreen = () => {
-  const navigation = useNavigation();
+  // const navigation = useNavigation();
+  const params = useGlobalSearchParams();
   const [modalVisible, setModalVisible] = useState(false);
+  const [stewards, setStewards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tableId, setTableId] = useState('');
 
-  const handlePress = (steward: any) => {
-    navigation.navigate('mainbilling', { steward });
+
+  useEffect(() => {
+    // Get tableId from route params
+    if (params?.tableId) {
+      // Ensure tableId is properly formatted with 'T' prefix
+      const id = params.tableId.toString();
+      setTableId(id.startsWith('T') ? id : `T${id}`);
+    }
+    fetchStewards();
+  }, [params?.tableId]);
+
+
+  const fetchStewards = async () => {
+    const login_token = await AsyncStorage.getItem("login_token")
+    try {
+      setLoading(true);
+      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          "function": "get_available_stewards",
+          "data": {
+            "login_token": login_token,
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (data.status === "success") {
+        // Transform the data to match our UI needs
+        const transformedStewards = data.stewards.map(steward => ({
+          id: steward.user_id,
+          name: steward.full_name,
+          count: steward.user_id
+        }));
+        setStewards(transformedStewards);
+      } else {
+        console.error("Failed to fetch stewards");
+      }
+    } catch (error) {
+      console.error("Error fetching stewards:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handlePress = (steward) => {
+    router.push({
+      pathname: '/mainbilling',
+      params: {
+        stewardId: steward.id,
+        tableId: tableId
+      }
+    });
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#f57c00" />
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push('/table')}>
-  <Ionicons name="arrow-back" size={24} color="#000" />
-      </TouchableOpacity>
-
+          <Ionicons name="arrow-back" size={24} color="#000" />
+        </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Select Steward</Text>
         <View style={styles.headerRight}>
@@ -60,31 +121,31 @@ const StewardScreen = () => {
         >
           <View style={styles.sideMenu}>
             <Text style={styles.menuTitle}>Menu</Text>
-      
+
             <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/profile'); }}>
               <Text style={styles.menuItem}>Profile</Text>
             </TouchableOpacity>
-      
+
             <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/summary'); }}>
               <Text style={styles.menuItem}>Summary</Text>
             </TouchableOpacity>
-      
+
             <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/history'); }}>
               <Text style={styles.menuItem}>History</Text>
             </TouchableOpacity>
-      
+
             <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/backoffice'); }}>
               <Text style={styles.menuItem}>Back Office</Text>
             </TouchableOpacity>
-      
+
             <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/settings'); }}>
               <Text style={styles.menuItem}>Setting</Text>
             </TouchableOpacity>
-      
+
             <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/login'); }}>
               <Text style={styles.menuItem}>Logout</Text>
             </TouchableOpacity>
-      
+
             {/* Footer */}
             <View style={styles.menuFooter}>
               <Text style={styles.logoText}>
@@ -97,14 +158,16 @@ const StewardScreen = () => {
       </Modal>
 
       {/* Table No */}
-      <View style={styles.tableContainer}>
-        <Text style={styles.tableText}>T02</Text>
-      </View>
+      {tableId && (
+        <View style={styles.tableContainer}>
+          <Text style={styles.tableText}>{tableId}</Text>
+        </View>
+      )}
 
       {/* Steward List */}
       <FlatList
         data={stewards}
-        keyExtractor={(_, index) => index.toString()}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.card} onPress={() => handlePress(item)}>
@@ -114,11 +177,15 @@ const StewardScreen = () => {
             />
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.id}>{item.id}</Text>
             </View>
             <Text style={styles.count}>{item.count}</Text>
           </TouchableOpacity>
         )}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No stewards available</Text>
+          </View>
+        }
       />
 
       {/* Bottom Navigation */}
@@ -128,11 +195,9 @@ const StewardScreen = () => {
         <NavButton label="Delivery" icon="car" route="/delivery" />
         <NavButton label="Quick" icon="menu" route="/quick" />
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
-
-export default StewardScreen;
 
 // NavButton for Bottom Navigation
 const NavButton = ({ label, icon, route, active = false }) => (
@@ -147,6 +212,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f3f1ef',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#888',
   },
   header: {
     flexDirection: 'row',
@@ -207,11 +286,12 @@ const styles = StyleSheet.create({
   },
   name: {
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 18,
     color: '#333',
   },
   id: {
     fontSize: 12,
+    fontWeight: '700',
     color: '#888',
   },
   count: {
@@ -242,53 +322,45 @@ const styles = StyleSheet.create({
   },
   // Side menu
   overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        flexDirection: 'row',
-    },
-    sideMenu: {
-        width: 250,
-        backgroundColor: '#fff',
-        paddingTop: 60,
-        paddingHorizontal: 20,
-        borderBottomRightRadius: 15,
-        borderTopRightRadius: 15,
-        elevation: 5,
-    },
-    menuTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        marginBottom: 20,
-        color: '#666666',
-    },
-    menuFooter: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    flexDirection: 'row',
+  },
+  sideMenu: {
+    width: 250,
+    backgroundColor: '#fff',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    borderBottomRightRadius: 15,
+    borderTopRightRadius: 15,
+    elevation: 5,
+  },
+  menuTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 20,
+    color: '#666666',
+  },
+  menuFooter: {
     position: 'absolute',
     bottom: 30,
     right: 20,
     alignItems: 'flex-end',
-    },
-
-    logoText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1c1c1c',
-    },
-
-
-footerText: {
-  fontSize: 12,
-  color: '#666',
-  marginTop: 4,
-},
-    menuItem: {
-        fontSize: 16,
-        marginVertical: 12,
-        color: '#333',
-        left: 15,
-    },
-
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-    },
+  },
+  logoOrange: {
+    color: '#f57c00',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  menuItem: {
+    fontSize: 16,
+    marginVertical: 12,
+    color: '#333',
+    left: 15,
+  },
 });
+
+export default StewardScreen;

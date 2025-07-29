@@ -1,49 +1,127 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Dimensions,
     FlatList,
     Modal,
+    SafeAreaView,
     StyleSheet,
     Text,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    View,
+    View
 } from 'react-native';
-
-const TABLE_DATA = Array.from({ length: 30 }, (_, i) => ({
-    id: `${i + 1}`,
-    label: `T0${(i % 3) + 1}`,
-    amount: [8500, 15000, ''][i % 3],
-    code: ['PCW40', 'PCW45', 'PCW30'][i % 3],
-    color: ['#555', '#f57c00', '#ddd'][i % 3],
-}));
 
 const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
 const boxSize = screenWidth / numColumns - 24;
 
 const TableScreen = () => {
-    const [modalVisible, setModalVisible] = useState(false); // side menu
-    const [quickMenuVisible, setQuickMenuVisible] = useState(false); // quick menu modal
+    const [modalVisible, setModalVisible] = useState(false);
+    const [quickMenuVisible, setQuickMenuVisible] = useState(false);
+    const [tables, setTables] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchTableData();
+    }, []);
+
+    const fetchTableData = async () => {
+        const login_token = await AsyncStorage.getItem("login_token");
+        try {
+            setLoading(true);
+            const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    "function": "get_table_list",
+                    "data": {
+                        "login_token": login_token
+                    }
+                })
+            });
+
+            const data = await response.json();
+            if (data.status === "success") {
+                setTables(data.table_count);
+            } else {
+                console.error("Failed to fetch tables");
+            }
+        } catch (error) {
+            console.error("Error fetching tables:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getTableColor = (status) => {
+        switch (status) {
+            case 'act': return '#86C1E9'; // Blue for active
+            case 'inv': return '#E67F22'; // Orange for invoice
+            default: return '#A9B7B8';    // Grey for other statuses
+        }
+    };
 
     const renderItem = ({ item }) => (
         <TouchableOpacity
-            onPress={() => router.push('/steward')}
-            style={[styles.tableBox, { backgroundColor: item.color, width: boxSize, height: boxSize }]}
+            onPress={() => {
+                if (item.status === 'done') {
+                    router.push({
+                        pathname: '/steward',
+                        params: { tableId: item.table_id }
+                    });
+                } else {
+                    router.push({
+                        pathname: '/mainbilling',
+                        params: { tableId: item.table_id }
+                    });
+                }
+            }}
+            style={[styles.tableBox, {
+                backgroundColor: getTableColor(item.status),
+                width: boxSize,
+                height: boxSize
+            }]}
         >
-            <Text style={styles.amount}>{item.amount}</Text>
-            <Text style={styles.tableId}>{item.label}</Text>
-            <View style={styles.tagContainer}>
-                <Text style={styles.tagText}>{item.code}</Text>
+            {/* Top-right: Table ID */}
+            <Text style={styles.tableId}>T{item.table_id}</Text>
+
+            {/* Amount in center */}
+            <Text style={styles.tablePrice}>
+                {item.order && item.order !== "0" ? `${item.order}` : '0.00'}
+            </Text>
+
+            {/* Bottom overlay with dark transparent background */}
+            <View style={styles.bottomOverlay}>
+                {/* Bottom-left: Steward ID */}
+                <Text style={styles.stewardId}>
+                    {item.steward && item.steward !== -1 ? `ST-${item.steward}` : 'N/A'}
+                </Text>
+
+                {/* Bottom-right: Empty for now */}
+                <Text style={styles.foodCountText}>
+                    {item.order_item_count}
+                </Text>
             </View>
         </TouchableOpacity>
     );
 
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color="#f57c00" />
+            </View>
+        );
+    }
+
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             {/* Header */}
             <LinearGradient
                 colors={['#1c1c1c', '#d76400']}
@@ -60,62 +138,61 @@ const TableScreen = () => {
                 </Text>
             </LinearGradient>
 
-           {/* Side Menu Modal */}
-<Modal
-  transparent
-  visible={modalVisible}
-  animationType="slide"
-  onRequestClose={() => setModalVisible(false)}
->
-  <TouchableOpacity
-    style={styles.overlay}
-    activeOpacity={1}
-    onPressOut={() => setModalVisible(false)}
-  >
-    <View style={styles.sideMenu}>
-      <Text style={styles.menuTitle}>Menu</Text>
+            {/* Side Menu Modal */}
+            <Modal
+                transparent
+                visible={modalVisible}
+                animationType="slide"
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.overlay}
+                    activeOpacity={1}
+                    onPressOut={() => setModalVisible(false)}
+                >
+                    <View style={styles.sideMenu}>
+                        <Text style={styles.menuTitle}>Menu</Text>
 
-      <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/profile'); }}>
-        <Text style={styles.menuItem}>Profile</Text>
-      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/profile'); }}>
+                            <Text style={styles.menuItem}>Profile</Text>
+                        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/summary'); }}>
-        <Text style={styles.menuItem}>Summary</Text>
-      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/summary'); }}>
+                            <Text style={styles.menuItem}>Summary</Text>
+                        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/history'); }}>
-        <Text style={styles.menuItem}>History</Text>
-      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/history'); }}>
+                            <Text style={styles.menuItem}>History</Text>
+                        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/backoffice'); }}>
-        <Text style={styles.menuItem}>Back Office</Text>
-      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/backoffice'); }}>
+                            <Text style={styles.menuItem}>Back Office</Text>
+                        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/settings'); }}>
-        <Text style={styles.menuItem}>Setting</Text>
-      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/settings'); }}>
+                            <Text style={styles.menuItem}>Setting</Text>
+                        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/login'); }}>
-        <Text style={styles.menuItem}>Logout</Text>
-      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/login'); }}>
+                            <Text style={styles.menuItem}>Logout</Text>
+                        </TouchableOpacity>
 
-      {/* Footer */}
-      <View style={styles.menuFooter}>
-        <Text style={styles.logoText}>
-          <Text style={styles.logoOrange}>i</Text>POS
-        </Text>
-        <Text style={styles.footerText}>Powered by introps IT</Text>
-      </View>
-    </View>
-  </TouchableOpacity>
-</Modal>
-
+                        {/* Footer */}
+                        <View style={styles.menuFooter}>
+                            <Text style={styles.logoText}>
+                                <Text style={styles.logoOrange}>i</Text>POS
+                            </Text>
+                            <Text style={styles.footerText}>Powered by introps IT</Text>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
 
             {/* Table Grid */}
             <FlatList
-                data={TABLE_DATA}
+                data={tables}
                 renderItem={renderItem}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.table_id.toString()}
                 numColumns={numColumns}
                 contentContainerStyle={styles.gridContainer}
                 showsVerticalScrollIndicator={false}
@@ -167,7 +244,8 @@ const TableScreen = () => {
                     ))}
                 </View>
             </Modal>
-        </View>
+        </SafeAreaView>
+
     );
 };
 
@@ -185,12 +263,14 @@ const NavButton = ({ label, icon, route, onPress, active = false }) => (
     </TouchableOpacity>
 );
 
-export default TableScreen;
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f6f4f2',
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     header: {
         paddingTop: 40,
@@ -228,12 +308,6 @@ const styles = StyleSheet.create({
         padding: 10,
         width: 100,
     },
-    amount: {
-        fontSize: 20,
-        color: '#fff',
-        marginTop: 20,
-        fontWeight: 'bold',
-    },
     tableId: {
         color: '#fff',
         position: 'absolute',
@@ -241,18 +315,40 @@ const styles = StyleSheet.create({
         right: 10,
         fontWeight: '600',
     },
+    tablePrice: {
+        color: '#fff',
+        fontSize: 20,
+        fontWeight: '600',
+    },
+    bottomOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        borderBottomLeftRadius: 12,
+        borderBottomRightRadius: 12,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    stewardId: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
     tagContainer: {
-        backgroundColor: '#222',
+        backgroundColor: '#000',
         borderRadius: 5,
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
         paddingVertical: 2,
-        marginTop: 25,
-        marginBottom: -15,
-        left: 25,
     },
     tagText: {
         color: '#fff',
         fontSize: 10,
+        fontWeight: '600',
     },
     bottomNav: {
         flexDirection: 'row',
@@ -294,36 +390,31 @@ const styles = StyleSheet.create({
         color: '#666666',
     },
     menuFooter: {
-    position: 'absolute',
-    bottom: 30,
-    right: 20,
-    alignItems: 'flex-end',
+        position: 'absolute',
+        bottom: 30,
+        right: 20,
+        alignItems: 'flex-end',
     },
-
     logoText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1c1c1c',
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1c1c1c',
     },
-
-
-footerText: {
-  fontSize: 12,
-  color: '#666',
-  marginTop: 4,
-},
+    footerText: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 4,
+    },
     menuItem: {
         fontSize: 16,
         marginVertical: 12,
         color: '#333',
         left: 15,
     },
-
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.3)',
     },
-
     quickMenuModal: {
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
@@ -335,17 +426,20 @@ footerText: {
         paddingBottom: 20,
         paddingTop: 40
     },
-
     menuIconBox: {
         width: '30%',
         alignItems: 'center',
         marginBottom: 20,
     },
-
     menuLabel: {
         fontSize: 12,
         color: '#333',
         marginTop: 6,
         textAlign: 'center',
     },
+    foodCountText: {
+        color: '#fff',
+    }
 });
+
+export default TableScreen;
