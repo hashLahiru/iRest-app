@@ -28,7 +28,7 @@ const StewardScreen = () => {
     if (params?.tableId) {
       // Ensure tableId is properly formatted with 'T' prefix
       const id = params.tableId.toString();
-      setTableId(id.startsWith('T') ? id : `T${id}`);
+      setTableId(id);
     }
     fetchStewards();
   }, [params?.tableId]);
@@ -71,6 +71,7 @@ const StewardScreen = () => {
   };
 
   const handlePress = (steward) => {
+    console.log("Selected Steward:", steward);
     router.push({
       pathname: '/mainbilling',
       params: {

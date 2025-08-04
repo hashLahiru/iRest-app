@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useGlobalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -12,49 +15,217 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const API_URL = 'http://raiza.digieclipse.com/App_apiv2/app_api';
+
 export default function BillScreen() {
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
   const params = useGlobalSearchParams();
+  const [saving, setSaving] = useState(false);
 
-  console.log(params.cartItems);
+  const [items, setItems] = useState<
+    { id: string; foodItemId?: string; name: string; qty: number; rate: number }[]
+  >([]);
 
-  const parsedCartItems = params.cartItems
-    ? JSON.parse(decodeURIComponent(params.cartItems))
-    : [];
+  const parseCartItems = (raw: unknown) => {
+    try {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
 
-  const initialItems = parsedCartItems.map((item) => ({
-    id: item.id,
-    name: `${item.name} (${item.variation})`,
-    qty: item.quantity,
-    rate: item.price
-  }));
+      let str = String(raw);
 
-  const [items, setItems] = useState(initialItems);
+      let maybeDecoded = str;
+      try {
+        if (/%[0-9A-Fa-f]{2}/.test(str)) {
+          maybeDecoded = decodeURIComponent(str);
+        }
+      } catch {
+        // ignore decode errors, we'll try plain parse next
+      }
 
+      try {
+        return JSON.parse(maybeDecoded);
+      } catch {
+        return JSON.parse(str);
+      }
+    } catch (e) {
+      console.warn('Failed to parse cartItems param:', e);
+      return [];
+    }
+  };
 
-  const updateQty = (index, delta) => {
-    setItems((prev) =>
-      prev.map((item, i) =>
-        i === index ? { ...item, qty: Math.max(1, item.qty + delta) } : item
+  // 🔁 Re-hydrate items whenever params.cartItems changes
+  useEffect(() => {
+    if (params.isActive === 'true') {
+      getActiveOrder(); // fetch from API
+    } else {
+      const parsedCartItems = parseCartItems(params.cartItems);
+      const mapped = parsedCartItems.map((item: any) => ({
+        id: item.id,
+        foodItemId: item.foodItemId,
+        name: `${item.name} (${item.variation})`,
+        qty: Number(item.quantity) || 1,
+        rate: Number(item.price) || 0,
+      }));
+
+      setItems(mapped);
+    }
+  }, [params.isActive, params.cartItems]);
+
+  // qty +/- handlers
+  const updateQty = (index: number, delta: number) => {
+    setItems(prev =>
+      prev.map((it, i) =>
+        i === index ? { ...it, qty: Math.max(1, it.qty + delta) } : it
       )
     );
   };
 
+  const removeItem = (index: number) => {
+    setItems(prev => prev.filter((_, i) => i !== index));
+  };
+
   const total = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+
+  const getActiveOrder = async () => {
+    try {
+      const login_token = await AsyncStorage.getItem('login_token');
+      const tableId = params.tableId;
+
+      if (!login_token || !tableId) {
+        Alert.alert('Missing info', 'Login token or table ID missing');
+        return;
+      }
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          function: 'get_active_order',
+          data: {
+            login_token,
+            table_id: tableId,
+          },
+        }),
+      });
+
+      const json = await response.json();
+
+      if (json.status !== 'success') {
+        Alert.alert('Fetch failed', json.message || 'Could not fetch active order.');
+        return;
+      }
+
+      const orderItems = json?.order?.order_items || [];
+
+      const mapped = orderItems.map((item: any) => ({
+        id: item.ris_id,
+        foodItemId: item.ris_id,
+        name: `${item.name} (${item.variation})`,
+        qty: Number(item.o_qty) || 1,
+        rate: Number(item.s_price) || 0,
+      }));
+
+      setItems(mapped);
+    } catch (e: any) {
+      console.error('getActiveOrder error:', e);
+      Alert.alert('Error', 'Could not load active order.');
+    }
+  };
+
+  const handleSave = async () => {
+    const login_token = await AsyncStorage.getItem('login_token');
+    let tableId;
+
+    if (params.isActive !== 'true') {
+      tableId = params.tableId ?? '';
+    } else {
+      const tableIdStr = String(params.tableId ?? '').trim();
+      tableId = parseInt(tableIdStr.slice(1), 10);
+    }
+
+    const stewardId = String(params.stewardId ?? '').trim();
+
+    if (!tableId) {
+      Alert.alert('Missing info', 'Table ID is required.');
+      return;
+    }
+    if (items.length === 0) {
+      Alert.alert('No items', 'Please add at least one item before saving.');
+      return;
+    }
+
+    const payload = {
+      function: 'update_orders',
+      data: {
+        login_token: login_token,
+        table_id: tableId,
+        order_status: 'act',
+        steward_id: stewardId || '',
+        order_total: Number(total),
+        order_data: items.map(it => ({
+          id: String(it.id),
+          price: Number(it.rate),
+          quantity: Number(it.qty),
+        })),
+      },
+    };
+
+    try {
+      setSaving(true);
+
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || (json?.status && json.status !== 'success')) {
+        const message =
+          (json && (json.message || json.error)) ||
+          `Request failed (${res.status})`;
+        Alert.alert('Save failed', message);
+        return;
+      }
+
+      router.push({
+        pathname: '/table',
+        params: { tableId: tableId, isRefresh: 'true' },
+      });
+    } catch (e: any) {
+      Alert.alert('Network error', e?.message || 'Failed to save order.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-
-      {/* Header (Remains Fixed) */}
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/mainbilling')}>
+        <TouchableOpacity
+          onPress={() =>
+            router.push({
+              pathname: '/table',
+              params: {
+                tableId: (params.tableId as string) || 'Unknown Table',
+              },
+            })
+          }
+        >
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Main Billing</Text>
+        <View style={styles.tableNumberText}>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+            T-{params.tableId}
+          </Text>
+        </View>
         <Ionicons name="menu" size={24} color="#000" />
       </View>
 
-      {/* Table container (NEW container for item list) */}
+      {/* Items table */}
       <View style={styles.itemsContainer}>
         <View style={styles.tableHeader}>
           <Text style={[styles.tableHeaderText, { flex: 2 }]}>Item</Text>
@@ -65,10 +236,15 @@ export default function BillScreen() {
 
         <ScrollView showsVerticalScrollIndicator={false}>
           {items.map((item, index) => (
-            <View key={index} style={styles.tableRow}>
+            <View key={item.id ?? index} style={styles.tableRow}>
               <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>{(index + 1).toString().padStart(2, '0')} . {item.name}</Text>
-                <Text style={styles.itemCode}>{item.foodItemId}</Text>
+                <Text style={styles.itemName}>
+                  {(index + 1).toString().padStart(2, '0')} . {item.name}
+                </Text>
+                {/* foodItemId now exists in mapped items */}
+                {!!item.foodItemId && (
+                  <Text style={styles.itemCode}>{item.foodItemId}</Text>
+                )}
               </View>
 
               <View style={styles.qtyControls}>
@@ -85,12 +261,16 @@ export default function BillScreen() {
 
               <Text style={styles.rateText}>{item.rate}</Text>
               <Text style={styles.totalText}>{item.qty * item.rate}</Text>
+
+              <TouchableOpacity onPress={() => removeItem(index)} style={{ marginLeft: 10, padding: 4 }}>
+                <Ionicons name="trash" size={20} color="#f00" />
+              </TouchableOpacity>
             </View>
           ))}
         </ScrollView>
       </View>
 
-      {/* Summary box (below white container) */}
+      {/* Summary */}
       <View style={styles.summaryBox}>
         <View style={styles.summaryRow}>
           <Text style={styles.label}>Total Sale</Text>
@@ -109,21 +289,76 @@ export default function BillScreen() {
           <Text style={styles.amount}>00.00</Text>
         </View>
 
-        {/* Buttons */}
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.holdButton}>
-            <Text style={styles.holdText}>Hold</Text>
-          </TouchableOpacity>
+          {/* Save Button */}
           <TouchableOpacity
-            style={styles.payButton}
-            onPress={() => router.push('/payment')}
+            style={[
+              styles.holdButton,
+              (saving || params.isActive === 'true') && { opacity: 0.6 },
+            ]}
+            onPress={
+              saving || params.isActive === 'true' ? undefined : handleSave
+            }
+            disabled={saving || params.isActive === 'true'}
           >
-            <Text style={styles.payText}>Pay</Text>
+            {saving ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <Text style={styles.holdText}>Save</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Invoice Button - Disabled when saving */}
+          <TouchableOpacity
+            style={[
+              styles.payButton,
+              saving && { opacity: 0.4 },
+            ]}
+            disabled={saving}
+            onPress={() =>
+              !saving && (params.isActive === 'true') &&
+              router.push({
+                pathname: '/payment',
+                params: {
+                  tableId: params.tableId,
+                  total: total.toFixed(2),
+                  stewardId: params.stewardId,
+                  cartItems: params.cartItems || JSON.stringify(items),
+                  isInvoice: 'true',
+                  isDone: 'false',
+                },
+              })
+            }
+          >
+            <Text style={styles.payText}>Invoice</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Pay Button - Disabled when saving */}
+        <TouchableOpacity
+          style={[
+            styles.payButton2,
+            saving && { opacity: 0.4 },
+          ]}
+          disabled={saving}
+          onPress={() =>
+            !saving &&
+            router.push({
+              pathname: '/payment',
+              params: {
+                tableId: params.tableId,
+                total: total.toFixed(2),
+                stewardId: params.stewardId,
+                cartItems: params.cartItems || JSON.stringify(items),
+              },
+            })
+          }
+        >
+          <Text style={styles.payText2}>Pay</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Bottom Tab Navigation */}
+      {/* Bottom Nav (unchanged) */}
       <View style={styles.bottomNav}>
         <NavButton label="Dining" icon="restaurant" route="/table" />
         <NavButton label="Take Away" icon="cafe" route="/takeaway" />
@@ -135,16 +370,14 @@ export default function BillScreen() {
         />
       </View>
 
-      {/* Quick Menu Modal */}
+      {/* Quick Menu Modal (unchanged) */}
       <Modal
         visible={quickMenuVisible}
         transparent
         animationType="slide"
         onRequestClose={() => setQuickMenuVisible(false)}
       >
-        <TouchableWithoutFeedback
-          onPress={() => setQuickMenuVisible(false)}
-        >
+        <TouchableWithoutFeedback onPress={() => setQuickMenuVisible(false)}>
           <View style={styles.modalOverlay} />
         </TouchableWithoutFeedback>
 
@@ -165,7 +398,7 @@ export default function BillScreen() {
                 router.push(route);
               }}
             >
-              <Ionicons name={icon} size={28} color="#f57c00" />
+              <Ionicons name={icon as any} size={28} color="#f57c00" />
               <Text style={styles.menuLabel}>{label}</Text>
             </TouchableOpacity>
           ))}
@@ -175,7 +408,6 @@ export default function BillScreen() {
   );
 }
 
-// Bottom Nav Button
 const NavButton = ({ label, icon, route, active = false, onPress }) => (
   <TouchableOpacity
     style={styles.navItemContainer}
@@ -190,7 +422,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f6f4f2' },
 
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', paddingTop: 30, paddingBottom: 16, paddingHorizontal: 20, },
-  headerTitle: { fontSize: 20, fontWeight: '600', color: '#1c1c1c', right: 100, },
+  headerTitle: { fontSize: 20, fontWeight: '600', color: '#222', right: 60 },
   itemsContainer: { backgroundColor: '#fff', borderRadius: 12, paddingBottom: 8, flex: 1, },
   tableHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ececec', borderTopLeftRadius: 12, borderTopRightRadius: 12, paddingHorizontal: 15, paddingVertical: 10, },
   tableHeaderText: { fontWeight: '600', fontSize: 13, color: '#1c1c1c', },
@@ -211,10 +443,12 @@ const styles = StyleSheet.create({
   grandLabel: { fontSize: 16, fontWeight: '700', color: '#1c1c1c', },
   grandTotal: { fontSize: 16, fontWeight: '700', color: '#1c1c1c', },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, },
-  holdButton: { flex: 1, backgroundColor: '#ccc', borderRadius: 8, alignItems: 'center', paddingVertical: 12, marginRight: 10, },
+  holdButton: { flex: 1, backgroundColor: '#1c1c1c', borderRadius: 8, alignItems: 'center', paddingVertical: 12, marginRight: 10, },
   holdText: { fontWeight: '600', fontSize: 16, color: '#fff' },
   payButton: { flex: 1, backgroundColor: '#f57c00', borderRadius: 8, alignItems: 'center', paddingVertical: 12, },
   payText: { fontWeight: '600', fontSize: 16, color: '#fff' },
+  payButton2: { backgroundColor: '#f57c00', borderRadius: 8, alignItems: 'center', paddingVertical: 12, marginTop: 10, width: '100%', },
+  payText2: { fontWeight: '800', fontSize: 16, color: '#fff' },
   bottomNav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#ddd', },
   navItemContainer: { alignItems: 'center' },
   navText: { fontSize: 12, color: '#888', marginTop: 4 },
@@ -222,4 +456,6 @@ const styles = StyleSheet.create({
   quickMenuModal: { backgroundColor: '#fff', paddingVertical: 20, paddingHorizontal: 10, borderTopLeftRadius: 20, borderTopRightRadius: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', },
   menuIconBox: { width: '30%', alignItems: 'center', marginVertical: 15, },
   menuLabel: { marginTop: 6, fontSize: 13, color: '#333', textAlign: 'center', },
+  tableNumberText: { backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 0, alignSelf: 'center', right: 100 },
+  deleteIcon: { marginLeft: 10, padding: 4, }
 });

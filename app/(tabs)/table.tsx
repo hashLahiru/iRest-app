@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -25,6 +25,15 @@ const TableScreen = () => {
     const [quickMenuVisible, setQuickMenuVisible] = useState(false);
     const [tables, setTables] = useState([]);
     const [loading, setLoading] = useState(true);
+    const { tableId, isRefresh } = useLocalSearchParams();
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (isRefresh === 'true') {
+                fetchTableData();
+            }
+        }, [isRefresh])
+    );
 
     useEffect(() => {
         fetchTableData();
@@ -63,7 +72,7 @@ const TableScreen = () => {
     const getTableColor = (status) => {
         switch (status) {
             case 'act': return '#86C1E9'; // Blue for active
-            case 'inv': return '#E67F22'; // Orange for invoice
+            case 'inv': return '#E67F22';
             default: return '#A9B7B8';    // Grey for other statuses
         }
     };
@@ -76,7 +85,20 @@ const TableScreen = () => {
                         pathname: '/steward',
                         params: { tableId: item.table_id }
                     });
-                } else {
+                }
+                else if (item.status === 'act') {
+                    router.push({
+                        pathname: '/billScreen',
+                        params: { tableId: item.table_id, isActive: "true" }
+                    });
+                } else if (item.status === 'inv') {
+                    router.push({
+                        pathname: '/payment',
+                        params: { tableId: item.table_id, isActive: "false", isInvoice: "false", isDone: "true" }
+                    });
+                }
+                else {
+                    console.log('Navigating to main billing for table:', item.table_id);
                     router.push({
                         pathname: '/mainbilling',
                         params: { tableId: item.table_id }

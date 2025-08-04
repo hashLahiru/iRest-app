@@ -24,6 +24,7 @@ const boxWidth = screenWidth / numColumns - 24;
 interface Variation {
   size: string;
   price: number;
+  ris_id: string;
 }
 
 interface FoodItem {
@@ -73,10 +74,12 @@ export default function MainBilling() {
   const [foodData, setFoodData] = useState<FoodListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [stewardId, setStewardId] = useState<string | null>(null);
   const params = useGlobalSearchParams();
 
   // Fetch food data from API
   useEffect(() => {
+    setStewardId(params.stewardId as string || null);
     const fetchFoodData = async () => {
       const login_token = await AsyncStorage.getItem('login_token');
       try {
@@ -140,7 +143,8 @@ export default function MainBilling() {
     image: { uri: item.image }, // Convert to require format if needed
     variations: item.variations.map(v => ({
       size: v.size,
-      price: v.price
+      price: v.price,
+      ris_id: v.ris_id
     }))
   })) || [];
 
@@ -198,40 +202,73 @@ export default function MainBilling() {
   };
 
   const addToCart = () => {
-    if (!selectedItem || !selectedVariation) return;
-    const variationKey = `${selectedItem.id}_${selectedVariation.size}`;
-    const quantity = quantities[variationKey] || 1;
-    const itemTotal = selectedVariation.price * quantity;
+    if (!selectedItem) return;
 
-    const cartItem: CartItem = {
-      id: variationKey,
-      foodItemId: selectedItem.id,
-      name: selectedItem.name,
-      variation: selectedVariation.size,
-      price: selectedVariation.price,
-      quantity,
-      total: itemTotal,
-      image: selectedItem.image,
-    };
+    // Collect all quantities for this item's variations by ris_id
+    const risSet = new Set((selectedItem.variations || []).map(v => v.ris_id));
+    const entries = Object.entries(quantities).filter(
+      ([rid, qty]) => risSet.has(rid) && (qty as number) > 0
+    );
 
-    const index = cartItems.findIndex(item => item.id === variationKey);
-    const updatedCart = [...cartItems];
-    if (index >= 0) updatedCart[index] = cartItem;
-    else updatedCart.push(cartItem);
+    if (entries.length === 0) {
+      Alert?.alert?.('No size selected', 'Increase quantity for at least one size.');
+      return;
+    }
 
-    setCartItems(updatedCart);
+    const nextCart = [...cartItems];
+
+    entries.forEach(([rid, qty]) => {
+      const variation = selectedItem.variations.find(v => v.ris_id === rid);
+      if (!variation) return;
+
+      const quantityNum = Number(qty) || 1;
+      const row: CartItem = {
+        id: variation.ris_id,            // ✅ unique per sub-variation
+        foodItemId: selectedItem.id,
+        name: selectedItem.name,
+        variation: variation.size,
+        price: variation.price,
+        quantity: quantityNum,
+        total: variation.price * quantityNum,
+        image: selectedItem.image,
+      };
+
+      const idx = nextCart.findIndex(ci => ci.id === variation.ris_id);
+      if (idx >= 0) {
+        nextCart[idx] = row;             // replace with latest qty/price
+      } else {
+        nextCart.push(row);
+      }
+    });
+
+    setCartItems(nextCart);
+
+    // Clear only this product’s variation quantities by ris_id
+    setQuantities(prev => {
+      const copy = { ...prev };
+      risSet.forEach(rid => { delete copy[rid]; });
+      return copy;
+    });
+
+    // Close detail view
     setSelectedItem(null);
     setSelectedVariation(null);
   };
 
+
   const total = cartItems.reduce((sum, item) => sum + item.total, 0);
+  console.log('Full Card:', cartItems);
+  console.log('Steward ID:', stewardId);
+  console.log('Table ID:', params.tableId);
 
   const navigateToBillScreen = () => {
     router.push({
       pathname: '/billScreen',
       params: {
         cartItems: JSON.stringify(cartItems),
-        total: total.toFixed(2)
+        total: total.toFixed(2),
+        tableId: params.tableId || 'Unknown Table',
+        stewardId: params.stewardId || '',
       }
     });
   };
@@ -266,7 +303,7 @@ export default function MainBilling() {
             setSelectedVariation(null);
             setCartItems([]);
             setQuantities({});
-            router.push('/steward');
+            router.push('/table');
           }}
         >
           <Ionicons name="arrow-back" size={24} color="#000" />
@@ -379,23 +416,23 @@ export default function MainBilling() {
                 </View>
               </View>
               {selectedItem?.variations?.map((variation) => {
-                const variationKey = `${selectedItem.id}_${variation.size}`;
+                const key = variation.ris_id;              // ✅ use ris_id as the key
                 return (
-                  <View key={variation.size} style={styles.variationOption}>
+                  <View key={key} style={styles.variationOption}>
                     <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 8 }}>
                       <Text style={styles.variationText}>{variation.size}</Text>
                       <Text style={styles.variationText}>{variation.price} LKR</Text>
                     </View>
                     <View style={styles.qtyRow}>
-                      <TouchableOpacity style={styles.qtyButton} onPress={() => decrement(variationKey)}>
+                      <TouchableOpacity style={styles.qtyButton} onPress={() => decrement(key)}>
                         <Text style={styles.qtyIcon}>−</Text>
                       </TouchableOpacity>
-                      <Text style={styles.qtyText}>{quantities[variationKey] || 0}</Text>
+                      <Text style={styles.qtyText}>{quantities[key] || 0}</Text>
                       <TouchableOpacity
                         style={styles.qtyButtonOrange}
                         onPress={() => {
-                          setSelectedVariation(variation);
-                          increment(variationKey);
+                          // You no longer need setSelectedVariation here
+                          increment(key);                 // ✅ increments by ris_id
                         }}
                       >
                         <Text style={styles.qtyIconWhite}>+</Text>

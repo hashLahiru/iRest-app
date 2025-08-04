@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Modal,
-  TextInput,
-  Image,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useGlobalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  Image,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const purchasedItems = [
   { id: '001', name: 'Chicken Biryani', qty: 1, price: 1200 },
@@ -23,9 +25,66 @@ export default function PrintScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerNumber, setCustomerNumber] = useState('');
+  const [orderId, setOrderId] = useState();
+  const params = useGlobalSearchParams();
+
+  useEffect(() => {
+    setOrderId(params.orderId || '');
+    console.log("PrintScreen params:", params.orderId);
+  }, [params]);
+
+  const handlePrintNow = async () => {
+    if (customerName.trim() === '' || customerNumber.trim() === '') {
+      Alert.alert("Validation Error", "Please enter both name and number");
+      return;
+    }
+
+    if (customerNumber.trim().length !== 10 || !/^\d{10}$/.test(customerNumber)) {
+      Alert.alert("Invalid Number", "Customer number must be exactly 10 digits.");
+      return;
+    }
+
+    try {
+      const login_token = await AsyncStorage.getItem('login_token');
+      if (!login_token) {
+        Alert.alert("Error", "User not logged in");
+        return;
+      }
+
+      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          function: "save_customer_info",
+          data: {
+            login_token: login_token,
+            ts_id: orderId,
+            customer_name: customerName,
+            customer_phone: customerNumber
+          }
+        }),
+      });
+
+      const result = await response.json();
+      if (result.status === 'success') {
+        Alert.alert("Success", "Customer info saved successfully");
+        router.push({
+          pathname: '/table',
+          params: { isRefresh: 'true' }
+        });
+      } else {
+        Alert.alert("Error", result.message || "Failed to save customer info");
+      }
+    } catch (error) {
+      console.error("API error:", error);
+      Alert.alert("Error", "Network or server error");
+    }
+  };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push('/table')}>
@@ -71,56 +130,52 @@ export default function PrintScreen() {
         </TouchableOpacity>
       </Modal>
       <View style={styles.card}>
-          
-          {/* Thank You Section */}
-          <View style={styles.thankYouContainer}>
-            <Image
-              source={require('../../assets/images/thankyou.png')} // 🔁 Replace with your image path
-              style={styles.thankYouImage}
-            />
-            <Text style={styles.thankYouText}>Thank You!</Text>
-          </View>
-{/* Customer Fields */}
-<View style={styles.inputGroup}>
-  <Text style={styles.inputLabel}>Customer Name</Text>
-  <TextInput
-    placeholder="Enter customer name"
-    value={customerName}
-    onChangeText={setCustomerName}
-    style={styles.input}
-  />
-
-  <Text style={styles.inputLabel}>Customer Number</Text>
-  <TextInput
-    placeholder="Enter customer number"
-    value={customerNumber}
-    onChangeText={setCustomerNumber}
-    keyboardType="phone-pad"
-    style={styles.input}
-  />
-</View>
-
-
-
-          {/* Buttons */}
-          <TouchableOpacity style={styles.printButton}>
-            <Ionicons name="print" size={20} color="#fff" />
-            <Text style={styles.printText}>Print Now</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.printButton, { backgroundColor: '#999', marginTop: 10 }]}
-            onPress={() => router.push('/table')}
-          >
-            <Ionicons name="close" size={20} color="#fff" />
-            <Text style={styles.printText}>Close</Text>
-          </TouchableOpacity>
+        {/* Thank You Section */}
+        <View style={styles.thankYouContainer}>
+          <Image
+            source={require('../../assets/images/thankyou.png')} // 🔁 Replace with your image path
+            style={styles.thankYouImage}
+          />
+          <Text style={styles.thankYouText}>Thank You!</Text>
+        </View>
+        {/* Customer Fields */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Customer Name</Text>
+          <TextInput
+            placeholder="Enter customer name"
+            value={customerName}
+            onChangeText={setCustomerName}
+            style={styles.input}
+          />
+          <Text style={styles.inputLabel}>Customer Number</Text>
+          <TextInput
+            placeholder="Enter customer number"
+            value={customerNumber}
+            onChangeText={setCustomerNumber}
+            keyboardType="phone-pad"
+            style={styles.input}
+          />
         </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        
-      </ScrollView>
-    </View>
+        {/* Buttons */}
+        <TouchableOpacity style={styles.printButton} onPress={handlePrintNow}>
+          <Ionicons name="print" size={20} color="#fff" />
+          <Text style={styles.printText}>Print Now</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.printButton, { backgroundColor: '#999', marginTop: 10 }]}
+          onPress={() => router.push({
+            pathname: '/table',
+            params: { isRefresh: 'true' },
+          })}
+        >
+          <Ionicons name="close" size={20} color="#fff" />
+          <Text style={styles.printText}>Close</Text>
+        </TouchableOpacity>
+      </View>
+
+    </SafeAreaView >
   );
 }
 
@@ -178,25 +233,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#ddd',
     marginVertical: 14,
   },
-inputGroup: {
-  marginTop: 20,
-},
-inputLabel: {
-  fontSize: 14,
-  fontWeight: '600',
-  color: '#444',
-  marginBottom: 6,
-  marginTop: 10,
-},
-input: {
-  borderWidth: 1,
-  borderColor: '#ccc',
-  borderRadius: 8,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 14,
-  backgroundColor: '#fff',
-},
+  inputGroup: {
+    marginTop: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#444',
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    backgroundColor: '#fff',
+  },
 
   printButton: {
     marginTop: 70,
