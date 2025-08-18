@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useGlobalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -51,7 +51,7 @@ export default function PrintScreen() {
         return;
       }
 
-      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+      const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

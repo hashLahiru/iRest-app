@@ -1,6 +1,5 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
 
 import { HapticTab } from '@/components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
@@ -12,23 +11,13 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={({ route }) => ({
+      screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
-        // Hide tab bar on 'index' and 'login' screens
-        tabBarStyle: ['index', 'login', 'home', 'table', 'steward', 'mainbilling', 'billScreen', 'payment', 'print', 'delivery', 'customproduct', 'deliverydetails', 'daysummary', 'saleshistory',
-          'takeaway', 'profile'
-        ].includes(route.name)
-          ? { display: 'none' }
-          : Platform.select({
-              ios: {
-                position: 'absolute',
-              },
-              default: {},
-            }),
-      })}
+        tabBarStyle: { display: 'none' },
+      }}
     />
   );
 }

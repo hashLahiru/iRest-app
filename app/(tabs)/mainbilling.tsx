@@ -77,13 +77,13 @@ export default function MainBilling() {
   const [stewardId, setStewardId] = useState<string | null>(null);
   const params = useGlobalSearchParams();
 
-  // Fetch food data from API
   useEffect(() => {
     setStewardId(params.stewardId as string || null);
+
     const fetchFoodData = async () => {
       const login_token = await AsyncStorage.getItem('login_token');
       try {
-        const response = await axios.post('http://raiza.digieclipse.com/App_apiv2/app_api', {
+        const response = await axios.post('https://raiza.digieclipse.com/App_apiv2/app_api', {
           function: "get_food_list",
           data: {
             login_token: login_token,
@@ -140,7 +140,7 @@ export default function MainBilling() {
     name: item.name,
     category: foodData.food_list.categories[item.super_category_id]?.find(c => c.id === item.category_id)?.name || item.category_id,
     superCategory: item.super_category_id,
-    image: { uri: item.image }, // Convert to require format if needed
+    image: { uri: item.image },
     variations: item.variations.map(v => ({
       size: v.size,
       price: v.price,
@@ -148,18 +148,15 @@ export default function MainBilling() {
     }))
   })) || [];
 
-  // Filter items based on selections and search query
   const getFilteredItems = () => {
     let items = allItems;
 
-    // Apply search filter first
     if (searchQuery) {
       items = items.filter(item =>
         item.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Then apply category filters
     if (selectedItem) {
       return [selectedItem];
     }
@@ -177,7 +174,6 @@ export default function MainBilling() {
 
   const filteredItems = getFilteredItems();
 
-  // Get categories for the selected super category
   const getCurrentCategories = () => {
     return categories[selectedSuperCategory as keyof typeof categories] || [];
   };
@@ -204,7 +200,6 @@ export default function MainBilling() {
   const addToCart = () => {
     if (!selectedItem) return;
 
-    // Collect all quantities for this item's variations by ris_id
     const risSet = new Set((selectedItem.variations || []).map(v => v.ris_id));
     const entries = Object.entries(quantities).filter(
       ([rid, qty]) => risSet.has(rid) && (qty as number) > 0
@@ -223,7 +218,7 @@ export default function MainBilling() {
 
       const quantityNum = Number(qty) || 1;
       const row: CartItem = {
-        id: variation.ris_id,            // ✅ unique per sub-variation
+        id: variation.ris_id,
         foodItemId: selectedItem.id,
         name: selectedItem.name,
         variation: variation.size,
@@ -235,7 +230,7 @@ export default function MainBilling() {
 
       const idx = nextCart.findIndex(ci => ci.id === variation.ris_id);
       if (idx >= 0) {
-        nextCart[idx] = row;             // replace with latest qty/price
+        nextCart[idx] = row;
       } else {
         nextCart.push(row);
       }
@@ -243,14 +238,12 @@ export default function MainBilling() {
 
     setCartItems(nextCart);
 
-    // Clear only this product’s variation quantities by ris_id
     setQuantities(prev => {
       const copy = { ...prev };
       risSet.forEach(rid => { delete copy[rid]; });
       return copy;
     });
 
-    // Close detail view
     setSelectedItem(null);
     setSelectedVariation(null);
   };
@@ -262,15 +255,30 @@ export default function MainBilling() {
   console.log('Table ID:', params.tableId);
 
   const navigateToBillScreen = () => {
-    router.push({
-      pathname: '/billScreen',
-      params: {
-        cartItems: JSON.stringify(cartItems),
-        total: total.toFixed(2),
-        tableId: params.tableId || 'Unknown Table',
-        stewardId: params.stewardId || '',
-      }
-    });
+    if (params.isTakeAway === "true") {
+      router.push({
+        pathname: '/billScreen',
+        params: {
+          cartItems: JSON.stringify(cartItems),
+          total: total.toFixed(2),
+          tableId: -1,
+          stewardId: params.stewardId || '',
+          isTakeAway: "true",
+        }
+      });
+    } else {
+      router.push({
+        pathname: '/billScreen',
+        params: {
+          cartItems: JSON.stringify(cartItems),
+          total: total.toFixed(2),
+          tableId: params.tableId || 'Unknown Table',
+          stewardId: params.stewardId || '',
+          isTakeAway: "false",
+        }
+      });
+    }
+
   };
 
   if (loading) {

@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { router, useGlobalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +28,7 @@ export default function PaymentScreen() {
   const [cardNumber, setCardNumber] = useState('');
   const [isInvoice, setIsInvoice] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  // const [isTakeAway, setIsTakeAway] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const params = useGlobalSearchParams();
@@ -39,10 +42,15 @@ export default function PaymentScreen() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paidAmount, setPaidAmount] = useState(0);
   const [orderId, setOrderId] = useState('');
+  const hasInitialized = useRef(false);
+
+  const orderStatus = Array.isArray(params.orderStatus)
+    ? params.orderStatus[0]
+    : params.orderStatus ?? '';
+  console.log("Payment OrderStatus : ", orderStatus);
 
   const handleMethodSelection = (method) => {
     setSelectedMethod(method);
-    // Reset fields when changing payment method
     if (method === 'Cash') {
       setCash('0');
       setCard('0');
@@ -64,7 +72,6 @@ export default function PaymentScreen() {
     }
   };
 
-  // Calculate paid amount and remaining balance
   useEffect(() => {
     let paid = 0;
     if (selectedMethod === 'Cash') {
@@ -80,7 +87,6 @@ export default function PaymentScreen() {
     setBalance(paid - grandTotal);
   }, [cash, card, grandTotal, selectedMethod]);
 
-  // Calculate remaining amount for card when cash changes in split mode
   useEffect(() => {
     if (selectedMethod === 'Split' && cash && !isNaN(cash)) {
       const cashAmount = parseFloat(cash);
@@ -89,89 +95,186 @@ export default function PaymentScreen() {
     }
   }, [cash, grandTotal, selectedMethod]);
 
-  // Fetch service charge from API
-  useEffect(() => {
-    const fetchData = async () => {
-      const login_token = await AsyncStorage.getItem('login_token');
-      console.log("Passed params /payment:", params);
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        if (!hasInitialized.current) {
+          hasInitialized.current = true;
 
-      if (params.isDone === 'true') {
-        setIsDone(true);
+          const login_token = await AsyncStorage.getItem('login_token');
 
-        const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            function: "get_active_order",
-            data: {
-              login_token: login_token,
-              table_id: params.tableId,
-            }
-          }),
-        });
-        const data = await response.json();
-        console.log("Order data:", data.order.ts_id);
-        setOrderId(data.order.ts_id);
-
-        const orderTotal = parseFloat(data?.order?.order_total || 0);
-        const orderDiscount = parseFloat(data?.order?.discount || 0);
-        const orderServiceCharge = parseFloat(data?.order?.service_charge || 0);
-        const orderGrandTotal = parseFloat(data?.order?.grand_total || 0);
-        const otherCharges = parseFloat(data?.order?.other_charges || 0);
-
-        setTotalSale(orderTotal);
-        setDiscountAmount(orderDiscount);
-        setServiceCharge(orderServiceCharge);
-        setGrandTotal(orderGrandTotal);
-        setOtherCharges(otherCharges);
-
-        if (orderTotal > 0) {
-          const discountPercentage = (orderDiscount / orderTotal) * 100;
-          setSelectedDiscount(`${Math.round(discountPercentage)}%`);
-        }
-      } else {
-        setIsDone(false);
-        const fetchServiceCharge = async () => {
-          setIsLoading(true);
-          try {
-            const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+          if (orderStatus === "taway_hold") {
+            const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                function: "get_service_charge",
+                function: "get_takeaway_order",
                 data: {
-                  login_token: login_token
+                  login_token,
+                  ts_id: params.orderId,
                 }
               }),
             });
 
             const data = await response.json();
-            console.log("Service charge data:", data);
-            if (data.status === "success") {
-              const charge = parseFloat(data.service_charge);
-              setServiceChargePercentage(charge);
-              const chargeAmount = totalSale * (charge / 100);
-              setServiceCharge(chargeAmount);
-              setOtherCharges(chargeAmount);
+
+            setOrderId(data.order.ts_id);
+            const orderTotal = parseFloat(data?.order?.order_total || 0);
+            const orderDiscount = parseFloat(data?.order?.discount || 0);
+            const orderServiceCharge = parseFloat(data?.order?.service_charge || 0);
+            const orderGrandTotal = parseFloat(data?.order?.grand_total || 0);
+
+            setTotalSale(orderTotal);
+            setDiscountAmount(orderDiscount);
+            setServiceCharge(orderServiceCharge);
+            setGrandTotal(orderGrandTotal);
+            setOtherCharges(orderServiceCharge);
+
+            if (orderTotal > 0) {
+              const discountPercentage = (orderDiscount / orderTotal) * 100;
+              setSelectedDiscount(`${Math.round(discountPercentage)}%`);
             }
-          } catch (error) {
-            Alert.alert("Error", "Failed to fetch service charge");
-            console.error("Service charge API error:", error);
-          } finally {
-            setIsLoading(false);
+          } else if (orderStatus === "delivery_pending") {
+            const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                function: "get_delivery_order",
+                data: {
+                  login_token,
+                  ts_id: params.ts_id,
+                }
+              }),
+            });
+
+            const data = await response.json();
+
+            setOrderId(data.order.ts_id);
+            console.log(orderId);
+            const orderTotal = parseFloat(data?.order?.order_total || 0);
+            const orderDiscount = parseFloat(data?.order?.discount || 0);
+            const orderServiceCharge = parseFloat(data?.order?.service_charge || 0);
+            const orderGrandTotal = parseFloat(data?.order?.grand_total || 0);
+
+            setTotalSale(orderTotal);
+            setDiscountAmount(orderDiscount);
+            setServiceCharge(orderServiceCharge);
+            setGrandTotal(orderGrandTotal);
+            setOtherCharges(orderServiceCharge);
+
+            if (orderTotal > 0) {
+              const discountPercentage = (orderDiscount / orderTotal) * 100;
+              setSelectedDiscount(`${Math.round(discountPercentage)}%`);
+            }
+          } else if (orderStatus === "dinein_active" || orderStatus === "dinein_inv") {
+            const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                function: "get_active_order",
+                data: {
+                  login_token,
+                  table_id: params.tableId,
+                }
+              }),
+            });
+
+            const data = await response.json();
+
+            setOrderId(data.order.ts_id);
+            console.log(orderId);
+            const orderTotal = parseFloat(data?.order?.order_total || 0);
+            const orderDiscount = parseFloat(data?.order?.discount || 0);
+            const orderServiceCharge = parseFloat(data?.order?.service_charge || 0);
+            const orderGrandTotal = parseFloat(data?.order?.grand_total || 0);
+
+            setTotalSale(orderTotal);
+            setDiscountAmount(orderDiscount);
+            setServiceCharge(orderServiceCharge);
+            setGrandTotal(orderGrandTotal);
+            setOtherCharges(orderServiceCharge);
+
+            if (orderTotal > 0) {
+              const discountPercentage = (orderDiscount / orderTotal) * 100;
+              setSelectedDiscount(`${Math.round(discountPercentage)}%`);
+            }
+          } else if (orderStatus === "taway_new") {
+            try {
+              const total = parseFloat(params.total || "0");
+              const discount = 0;
+              const service = 0;
+              const grand = total + service - discount;
+
+              setTotalSale(total);
+              setDiscountAmount(discount);
+              setServiceCharge(service);
+              setGrandTotal(grand);
+              setOtherCharges(service);
+
+              if (total > 0) {
+                const discountPercentage = (discount / total) * 100;
+                setSelectedDiscount(`${Math.round(discountPercentage)}%`);
+              }
+
+              const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  function: "update_orders",
+                  data: {
+                    login_token,
+                    table_id: "-1",
+                    order_status: "act",
+                    steward_id: "-1",
+                    smode: "taway",
+                    order_data: JSON.parse(params.cartItems).map(item => ({
+                      id: item.id,
+                      price: parseFloat(item.price),
+                      quantity: parseInt(item.quantity),
+                    }))
+                  }
+                })
+              });
+
+              const data = await response.json();
+
+              if (data.status === "success" && data.response?.ts_id) {
+                setOrderId(data.response.ts_id);
+                console.log("New orderId (ts_id):", orderId);
+              } else {
+                Alert.alert("Error", "Failed to create takeaway order");
+              }
+            } catch (error) {
+              console.error("Error processing takeaway order:", error);
+              Alert.alert("Error", "Server error while creating takeaway order");
+            }
+          } else if (orderStatus === "delivery_new") {
+            try {
+              const total = parseFloat(params.total || "0");
+              const discount = 0;
+              const service = 0;
+              const grand = total + service - discount;
+
+              setTotalSale(total);
+              setDiscountAmount(discount);
+              setServiceCharge(service);
+              setGrandTotal(grand);
+              setOtherCharges(service);
+            } catch (error) {
+              console.error("Error processing delivery order:", error);
+              Alert.alert("Error", "Server error while creating delivery order");
+            }
           }
-        };
+        }
+      };
 
-        fetchServiceCharge();
-      }
-    };
+      fetchData();
 
-    fetchData();
-  }, [params.tableId, params.isDone]);
+      return () => {
+        hasInitialized.current = false;
+      };
+    }, [params, orderStatus])
+  );
 
   const getDiscountAmount = () => {
     return totalSale * (parseInt(selectedDiscount) / 100);
@@ -183,7 +286,7 @@ export default function PaymentScreen() {
     const discountAmount = getDiscountAmount();
 
     try {
-      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+      const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -222,18 +325,12 @@ export default function PaymentScreen() {
   };
 
   useEffect(() => {
-    if (!isDone) {
-      const discountAmount = getDiscountAmount();
-      const newGrandTotal = totalSale + serviceCharge - discountAmount;
+    if (orderStatus === "dinein_active" || orderStatus === "taway_hold" || orderStatus === "taway_new" || orderStatus === "delivery_new") {
+      const discount = getDiscountAmount();
+      const newGrandTotal = totalSale + serviceCharge - discount;
       setGrandTotal(newGrandTotal);
     }
-  }, [selectedDiscount, totalSale, serviceCharge, isDone]);
-
-  useEffect(() => {
-    setIsInvoice(params.isInvoice === 'true');
-    setIsDone(params.isDone === 'true');
-    console.log("Route Params:", params);
-  }, [params]);
+  }, [selectedDiscount, totalSale, serviceCharge]);
 
   const handleDiscountSelection = (discount) => {
     setSelectedDiscount(discount);
@@ -248,19 +345,41 @@ export default function PaymentScreen() {
     try {
       setIsLoading(true);
       const login_token = await AsyncStorage.getItem('login_token');
-      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+      const discount = getDiscountAmount();
+
+      let paymentData: any;
+
+      if (orderStatus === "dinein_inv" || orderStatus === "taway_hold" || orderStatus === "taway_new" || orderStatus === "delivery_pending") {
+        paymentData = {
+          login_token: login_token,
+          ts_id: orderId,
+          cash: cash || '0',
+          card: card || '0',
+        };
+      } else {
+        paymentData = {
+          login_token: login_token,
+          ts_id: params.orderId,
+          cash: cash || '0',
+          card: card || '0',
+        };
+
+        if (orderStatus === "taway_hold") {
+          paymentData.discount = discount.toFixed(2);
+          console.log("Discount : ", paymentData.discount);
+        }
+      }
+
+      console.log("Payment Data : ", paymentData);
+
+      const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           function: "complete_payment",
-          data: {
-            login_token: login_token,
-            ts_id: orderId,
-            cash: cash || '0',
-            card: card || '0',
-          },
+          data: paymentData,
         }),
       });
 
@@ -278,8 +397,6 @@ export default function PaymentScreen() {
         throw new Error("Invalid response from server.");
       }
 
-      console.log("Payment Response:", data);
-
       if (data.status === "success") {
         const orderId = data.response;
         router.push({
@@ -291,13 +408,76 @@ export default function PaymentScreen() {
       }
 
     } catch (error) {
-      console.error("Payment Error:", error);
-      Alert.alert("Payment Error", error.message || "An unexpected error occurred.");
+      let errorMessage = "An unexpected error occurred.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      Alert.alert("Payment Error", errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleSaveDelivery = async () => {
+    try {
+      setIsLoading(true);
+
+      const login_token = await AsyncStorage.getItem('login_token');
+      const discount = getDiscountAmount();
+
+      const orderData = JSON.parse(params.cartItems || "[]").map(item => ({
+        id: item.id,
+        price: parseFloat(item.price),
+        quantity: parseInt(item.quantity),
+      }));
+
+      const payload = {
+        function: "save_delivery_order",
+        data: {
+          login_token: login_token,
+          table_id: "-2",
+          order_status: "pending",
+          steward_id: "-2",
+          smode: "delivery",
+          order_discount: discount.toFixed(2),
+          order_data: orderData,
+        },
+      };
+
+      const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      if (!text) throw new Error("Empty server response");
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Invalid JSON from server");
+      }
+
+      if (data.status === "success" && data.response?.ts_id) {
+        const ts_id = data.response.ts_id;
+
+        router.push({
+          pathname: "/deliverydetails",
+          params: { ts_id: ts_id, orderStatus: "delivery_new" },
+        });
+      } else {
+        Alert.alert("Error", data?.message || "Failed to save delivery order");
+      }
+
+    } catch (error) {
+      console.error("Save Delivery Error:", error);
+      Alert.alert("Error", error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -331,7 +511,7 @@ export default function PaymentScreen() {
             ) : (
               <>
                 {/* Payment Methods */}
-                {!isInvoice && (
+                {(orderStatus === "taway_new" || orderStatus === "taway_hold" || orderStatus === "dinein_inv" || orderStatus === "delivery_pending") && (
                   <View style={styles.box}>
                     <View style={styles.paymentHeader}>
                       <Text style={styles.boxTitle}>Payment Method</Text>
@@ -367,7 +547,7 @@ export default function PaymentScreen() {
                 )}
 
                 {/* Discount Section */}
-                {isInvoice && !isDone && (
+                {(orderStatus === "dinein_active" || orderStatus === "taway_new" || orderStatus === "taway_hold" || orderStatus === "delivery_new") && (
                   <View style={styles.box}>
                     <Text style={styles.boxTitle}>Discount</Text>
                     <View style={styles.buttonGrid}>
@@ -403,7 +583,7 @@ export default function PaymentScreen() {
                 )}
 
                 {/* Settle Input Fields */}
-                {!isInvoice && isDone && (
+                {(orderStatus === "taway_new" || orderStatus === "taway_hold" || orderStatus === "dinein_inv" || orderStatus === "delivery_pending") && (
                   <View style={styles.box}>
                     <Text style={styles.boxTitle}>Settle Bill</Text>
                     <View style={styles.inputRow}>
@@ -411,7 +591,6 @@ export default function PaymentScreen() {
                       <TextInput
                         value={cash}
                         onChangeText={(text) => {
-                          // Handle empty input or '0' at start
                           if (text === '' || text === '0') {
                             setCash(text);
                           } else {
@@ -468,20 +647,24 @@ export default function PaymentScreen() {
                     </View>
                   )}
                   <View style={styles.row}>
-                    <Text style={styles.label}>Discount</Text>
+                    <Text style={styles.label}>Delivery Charge</Text>
+                    <Text style={styles.value}>{serviceCharge.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Discount ({selectedDiscount})</Text>
                     <Text style={styles.value}>
-                      -{isDone ? discountAmount.toFixed(2) : selectedDiscount}
+                      -{(orderStatus === "dinein_active" || orderStatus === "taway_new" || orderStatus === "taway_hold" || orderStatus === "dinein_inv" || orderStatus === "delivery_new" || orderStatus === "delivery_pending") ? getDiscountAmount() : ''}
                     </Text>
                   </View>
                   <View style={styles.row}>
                     <Text style={styles.totalLabel}>Grand Total</Text>
                     <Text style={styles.totalValue}>{grandTotal.toFixed(2)}</Text>
                   </View>
-                  <View style={styles.row}>
+                  {(orderStatus === "taway_new" || orderStatus === "taway_hold" || orderStatus === "dinein_inv" || orderStatus === "delivery_pending") && <View style={styles.row}>
                     <Text style={styles.label}>Paid Amount</Text>
                     <Text style={styles.value}>{paidAmount.toFixed(2)}</Text>
-                  </View>
-                  {isDone && (
+                  </View>}
+                  {(orderStatus === "taway_new" || orderStatus === "taway_hold" || orderStatus === "dinein_inv" || orderStatus === "delivery_pending") && (
                     <View style={styles.row}>
                       <Text style={styles.label}>Balance</Text>
                       <Text style={[styles.value, { color: balance < 0 ? 'red' : 'green' }]}>
@@ -492,7 +675,7 @@ export default function PaymentScreen() {
                 </View>
 
                 {/* Action Buttons */}
-                {!isInvoice && isDone && (
+                {(orderStatus === "taway_new" || orderStatus === "taway_hold" || orderStatus === "dinein_inv") && (
                   <View style={styles.btnRow}>
                     <TouchableOpacity
                       style={styles.cancelBtn}
@@ -519,7 +702,7 @@ export default function PaymentScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
-                {isInvoice && (
+                {(orderStatus === "dinein_active") && (
                   <TouchableOpacity
                     style={[styles.payBtn, { marginTop: 12 }]}
                     onPress={handlePrintInvoice}
@@ -531,6 +714,39 @@ export default function PaymentScreen() {
                       <Text style={styles.payText}>Print Invoice</Text>
                     )}
                   </TouchableOpacity>
+                )}
+                {(orderStatus === "delivery_new" || orderStatus === "delivery_pending") && (
+                  <View style={styles.btnRow}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#313131ff',
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        paddingVertical: 14,
+                        marginRight: 10,
+                      }}
+                      disabled={isLoading || orderStatus === "delivery_pending"}
+                      onPress={() => {
+                        handleSaveDelivery();
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Proceed</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#f57c00',
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        paddingVertical: 14,
+                      }}
+                      disabled={isLoading}
+                      onPress={handlePayment}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Pay</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </>
             )}

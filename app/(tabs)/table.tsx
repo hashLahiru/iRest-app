@@ -7,14 +7,16 @@ import {
     ActivityIndicator,
     Dimensions,
     FlatList,
-    Modal,
     SafeAreaView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    TouchableWithoutFeedback,
     View
 } from 'react-native';
+
+import NavBar from '@/components/NavButton';
+import QuickMenuModal from '@/components/QuickMenuModal';
+import SideMenuModal from '@/components/SideMenuModal';
 
 const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
@@ -43,7 +45,7 @@ const TableScreen = () => {
         const login_token = await AsyncStorage.getItem("login_token");
         try {
             setLoading(true);
-            const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+            const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -71,9 +73,9 @@ const TableScreen = () => {
 
     const getTableColor = (status) => {
         switch (status) {
-            case 'act': return '#86C1E9'; // Blue for active
+            case 'act': return '#86C1E9';
             case 'inv': return '#E67F22';
-            default: return '#A9B7B8';    // Grey for other statuses
+            default: return '#A9B7B8';
         }
     };
 
@@ -88,17 +90,16 @@ const TableScreen = () => {
                 }
                 else if (item.status === 'act') {
                     router.push({
-                        pathname: '/billScreen',
-                        params: { tableId: item.table_id, isActive: "true" }
+                        pathname: '/billScreenDineIn',
+                        params: { tableId: item.table_id, orderStatus: "dinein_active" }
                     });
                 } else if (item.status === 'inv') {
                     router.push({
                         pathname: '/payment',
-                        params: { tableId: item.table_id, isActive: "false", isInvoice: "false", isDone: "true" }
+                        params: { tableId: item.table_id, orderStatus: "dinein_inv" }
                     });
                 }
                 else {
-                    console.log('Navigating to main billing for table:', item.table_id);
                     router.push({
                         pathname: '/mainbilling',
                         params: { tableId: item.table_id }
@@ -111,22 +112,17 @@ const TableScreen = () => {
                 height: boxSize
             }]}
         >
-            {/* Top-right: Table ID */}
             <Text style={styles.tableId}>T{item.table_id}</Text>
 
-            {/* Amount in center */}
             <Text style={styles.tablePrice}>
                 {item.order && item.order !== "0" ? `${item.order}` : '0.00'}
             </Text>
 
-            {/* Bottom overlay with dark transparent background */}
             <View style={styles.bottomOverlay}>
-                {/* Bottom-left: Steward ID */}
                 <Text style={styles.stewardId}>
                     {item.steward && item.steward !== -1 ? `ST-${item.steward}` : 'N/A'}
                 </Text>
 
-                {/* Bottom-right: Empty for now */}
                 <Text style={styles.foodCountText}>
                     {item.order_item_count}
                 </Text>
@@ -160,57 +156,8 @@ const TableScreen = () => {
                 </Text>
             </LinearGradient>
 
-            {/* Side Menu Modal */}
-            <Modal
-                transparent
-                visible={modalVisible}
-                animationType="slide"
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <TouchableOpacity
-                    style={styles.overlay}
-                    activeOpacity={1}
-                    onPressOut={() => setModalVisible(false)}
-                >
-                    <View style={styles.sideMenu}>
-                        <Text style={styles.menuTitle}>Menu</Text>
+            <SideMenuModal visible={modalVisible} onClose={() => setModalVisible(false)} />
 
-                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/profile'); }}>
-                            <Text style={styles.menuItem}>Profile</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/summary'); }}>
-                            <Text style={styles.menuItem}>Summary</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/history'); }}>
-                            <Text style={styles.menuItem}>History</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/backoffice'); }}>
-                            <Text style={styles.menuItem}>Back Office</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/settings'); }}>
-                            <Text style={styles.menuItem}>Setting</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/login'); }}>
-                            <Text style={styles.menuItem}>Logout</Text>
-                        </TouchableOpacity>
-
-                        {/* Footer */}
-                        <View style={styles.menuFooter}>
-                            <Text style={styles.logoText}>
-                                <Text style={styles.logoOrange}>i</Text>POS
-                            </Text>
-                            <Text style={styles.footerText}>Powered by introps IT</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-
-            {/* Table Grid */}
             <FlatList
                 data={tables}
                 renderItem={renderItem}
@@ -220,52 +167,8 @@ const TableScreen = () => {
                 showsVerticalScrollIndicator={false}
             />
 
-            {/* Bottom Menu */}
-            <View style={styles.bottomNav}>
-                <NavButton label="Dining" icon="restaurant" route="/table" active />
-                <NavButton label="Take Away" icon="cafe" route="/takeaway" />
-                <NavButton label="Delivery" icon="car" route="/delivery" />
-                <NavButton
-                    label="Quick"
-                    icon="menu"
-                    onPress={() => setQuickMenuVisible(true)}
-                />
-            </View>
-
-            {/* Quick Menu Modal */}
-            <Modal
-                visible={quickMenuVisible}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setQuickMenuVisible(false)}
-            >
-                <TouchableWithoutFeedback onPress={() => setQuickMenuVisible(false)}>
-                    <View style={styles.modalOverlay} />
-                </TouchableWithoutFeedback>
-
-                <View style={styles.quickMenuModal}>
-                    {[
-                        ['Day Summary', 'calendar', '/daysummary'],
-                        ['Sales History', 'receipt', '/saleshistory'],
-                        ['Cash Drawer', 'cash', '/cashdrawer'],
-                        ['Back Office', 'business', '/backoffice'],
-                        ['Settings', 'settings', '/settings'],
-                        ['Menu', 'restaurant', '/menu'],
-                    ].map(([label, icon, route]) => (
-                        <TouchableOpacity
-                            key={label}
-                            style={styles.menuIconBox}
-                            onPress={() => {
-                                setQuickMenuVisible(false);
-                                router.push(route);
-                            }}
-                        >
-                            <Ionicons name={icon} size={28} color="#f57c00" />
-                            <Text style={styles.menuLabel}>{label}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </Modal>
+            <NavBar activeRoute="Dining" onQuickMenuPress={() => setQuickMenuVisible(true)} />
+            <QuickMenuModal visible={quickMenuVisible} onClose={() => setQuickMenuVisible(false)} />
         </SafeAreaView>
 
     );

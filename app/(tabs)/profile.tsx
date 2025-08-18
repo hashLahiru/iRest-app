@@ -2,31 +2,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
+import SideMenuModal from '@/components/SideMenuModal';
+
 export default function ProfileScreen() {
-  const [quickMenuVisible, setQuickMenuVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push('/table')}>
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>User Profile</Text>
-        <TouchableOpacity onPress={() => setQuickMenuVisible(true)}>
+        <TouchableOpacity onPress={() => setModalVisible(true)}>
           <Ionicons name="menu" size={24} color="#000" />
         </TouchableOpacity>
       </View>
+
+      {/* Side Menu Modal */}
+      <SideMenuModal visible={modalVisible} onClose={() => setModalVisible(false)} />
 
       {/* Profile Content */}
       <ScrollView contentContainerStyle={styles.profileContent}>
@@ -49,70 +53,14 @@ export default function ProfileScreen() {
           <Text style={styles.infoValue}>Kandy</Text>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/')}> 
+        <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/')}>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <NavButton label="Dining" icon="restaurant" route="/table" />
-        <NavButton label="Take Away" icon="cafe" route="/takeaway" />
-        <NavButton label="Delivery" icon="car" route="/delivery" />
-        <NavButton
-          label="Quick"
-          icon="menu"
-          onPress={() => setQuickMenuVisible(true)}
-        />
-      </View>
-
-      {/* Quick Menu Modal */}
-      <Modal
-        visible={quickMenuVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setQuickMenuVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setQuickMenuVisible(false)}>
-          <View style={styles.modalOverlay} />
-        </TouchableWithoutFeedback>
-
-        <View style={styles.quickMenuModal}>
-          {[
-            ['Day Summary', 'calendar', '/daysummary'],
-            ['Sales History', 'receipt', '/saleshistory'],
-            ['Cash Drawer', 'cash', '/cashdrawer'],
-            ['Back Office', 'business', '/backoffice'],
-            ['Settings', 'settings', '/settings'],
-            ['Menu', 'restaurant', '/menu'],
-          ].map(([label, icon, route]) => (
-            <TouchableOpacity
-              key={label}
-              style={styles.menuIconBox}
-              onPress={() => {
-                setQuickMenuVisible(false);
-                router.push(route);
-              }}
-            >
-              <Ionicons name={icon} size={28} color="#f57c00" />
-              <Text style={styles.menuLabel}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
-const NavButton = ({ label, icon, route, active = false, onPress }) => (
-  <TouchableOpacity
-    style={styles.navItemContainer}
-    onPress={onPress || (() => router.push(route))}
-  >
-    <Ionicons name={icon} size={24} color={active ? '#f57c00' : '#ccc'} />
-    <Text style={[styles.navText, active && { color: '#f57c00' }]}>{label}</Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f6f4f2' },

@@ -23,7 +23,7 @@ export default function SplashScreen() {
           return router.replace('/login');
         }
 
-        const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+        const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

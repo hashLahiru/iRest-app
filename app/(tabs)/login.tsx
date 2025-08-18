@@ -30,7 +30,7 @@ export default function LoginScreen() {
     try {
       const last_workday = await AsyncStorage.getItem('last_workday');
 
-      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api',
+      const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api',
         {
           method: 'POST',
           headers: {
@@ -61,8 +61,6 @@ export default function LoginScreen() {
       setErrorMsg('An error occurred. Please try again later.');
       setModalVisible(true);
     }
-
-    // router.replace('/home');
   };
 
   return (

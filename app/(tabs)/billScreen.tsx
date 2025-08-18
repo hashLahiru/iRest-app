@@ -15,12 +15,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_URL = 'http://raiza.digieclipse.com/App_apiv2/app_api';
+const API_URL = 'https://raiza.digieclipse.com/App_apiv2/app_api';
 
 export default function BillScreen() {
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
   const params = useGlobalSearchParams();
   const [saving, setSaving] = useState(false);
+  const [isTakeAway, setIsTakeAway] = useState(false);
+  const [isActive, setIsActive] = useState(false);
+  const [isDone, setIsDone] = useState(false);
 
   const [items, setItems] = useState<
     { id: string; foodItemId?: string; name: string; qty: number; rate: number }[]
@@ -39,7 +42,7 @@ export default function BillScreen() {
           maybeDecoded = decodeURIComponent(str);
         }
       } catch {
-        // ignore decode errors, we'll try plain parse next
+        // ignore decode errors
       }
 
       try {
@@ -53,25 +56,28 @@ export default function BillScreen() {
     }
   };
 
-  // 🔁 Re-hydrate items whenever params.cartItems changes
   useEffect(() => {
+    console.log("Bill Screen Params : ", params);
+    const parsedCartItems = parseCartItems(params.cartItems);
+    const mapped = parsedCartItems.map((item: any) => ({
+      id: item.id,
+      foodItemId: item.foodItemId,
+      name: `${item.name} (${item.variation})`,
+      qty: Number(item.quantity) || 1,
+      rate: Number(item.price) || 0,
+    }));
+
+    setItems(mapped);
+
+    setIsTakeAway(params.isTakeAway === "true");
+    setIsActive(params.isActive === "true");
+    setIsDone(params.isDone === "true");
+
     if (params.isActive === 'true') {
-      getActiveOrder(); // fetch from API
-    } else {
-      const parsedCartItems = parseCartItems(params.cartItems);
-      const mapped = parsedCartItems.map((item: any) => ({
-        id: item.id,
-        foodItemId: item.foodItemId,
-        name: `${item.name} (${item.variation})`,
-        qty: Number(item.quantity) || 1,
-        rate: Number(item.price) || 0,
-      }));
-
-      setItems(mapped);
+      getActiveOrder();
     }
-  }, [params.isActive, params.cartItems]);
+  }, [params.isActive, params.cartItems, params.isTakeAway, params.isDone]);
 
-  // qty +/- handlers
   const updateQty = (index: number, delta: number) => {
     setItems(prev =>
       prev.map((it, i) =>
@@ -116,7 +122,6 @@ export default function BillScreen() {
       }
 
       const orderItems = json?.order?.order_items || [];
-
       const mapped = orderItems.map((item: any) => ({
         id: item.ris_id,
         foodItemId: item.ris_id,
@@ -172,7 +177,6 @@ export default function BillScreen() {
 
     try {
       setSaving(true);
-
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -200,6 +204,66 @@ export default function BillScreen() {
     }
   };
 
+  const handleHold = async () => {
+    const login_token = await AsyncStorage.getItem('login_token');
+    const tableId = params.tableId ?? '';
+    const stewardId = String(params.stewardId ?? '').trim();
+
+    if (!tableId) {
+      Alert.alert('Missing info', 'Table ID is required.');
+      return;
+    }
+    if (items.length === 0) {
+      Alert.alert('No items', 'Please add at least one item before holding.');
+      return;
+    }
+
+    const payload = {
+      function: 'update_orders',
+      data: {
+        login_token: login_token,
+        table_id: tableId,
+        order_status: 'hold',
+        steward_id: stewardId || '',
+        order_total: Number(total),
+        smode: 'taway',
+        order_data: items.map(it => ({
+          id: String(it.id),
+          price: Number(it.rate),
+          quantity: Number(it.qty),
+        })),
+      },
+    };
+
+    try {
+      setSaving(true);
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || (json?.status && json.status !== 'success')) {
+        const message =
+          (json && (json.message || json.error)) ||
+          `Request failed (${res.status})`;
+        Alert.alert('Hold failed', message);
+        return;
+      }
+
+      router.push({
+        pathname: '/takeaway',
+        params: { tableId: tableId, isRefresh: 'true' },
+      });
+    } catch (e: any) {
+      Alert.alert('Network error', e?.message || 'Failed to hold order.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -219,7 +283,7 @@ export default function BillScreen() {
         <Text style={styles.headerTitle}>Main Billing</Text>
         <View style={styles.tableNumberText}>
           <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-            T-{params.tableId}
+            {params.tableId !== '-1' ? `T-${params.tableId}` : 'TA'}
           </Text>
         </View>
         <Ionicons name="menu" size={24} color="#000" />
@@ -241,7 +305,6 @@ export default function BillScreen() {
                 <Text style={styles.itemName}>
                   {(index + 1).toString().padStart(2, '0')} . {item.name}
                 </Text>
-                {/* foodItemId now exists in mapped items */}
                 {!!item.foodItemId && (
                   <Text style={styles.itemCode}>{item.foodItemId}</Text>
                 )}
@@ -289,76 +352,148 @@ export default function BillScreen() {
           <Text style={styles.amount}>00.00</Text>
         </View>
 
-        <View style={styles.buttonRow}>
-          {/* Save Button */}
-          <TouchableOpacity
-            style={[
-              styles.holdButton,
-              (saving || params.isActive === 'true') && { opacity: 0.6 },
-            ]}
-            onPress={
-              saving || params.isActive === 'true' ? undefined : handleSave
-            }
-            disabled={saving || params.isActive === 'true'}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" />
-            ) : (
-              <Text style={styles.holdText}>Save</Text>
-            )}
-          </TouchableOpacity>
+        {/* Button Rows */}
+        {!isDone ? (
+          <>
+            <View style={styles.buttonRow}>
+              {/* Save Button - Disabled when isTakeAway or isActive is true */}
+              <TouchableOpacity
+                style={[
+                  styles.holdButton,
+                  (saving || isTakeAway || isActive) && { opacity: 0.6 },
+                ]}
+                onPress={handleSave}
+                disabled={saving || isTakeAway || isActive}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" />
+                ) : (
+                  <Text style={styles.holdText}>Save</Text>
+                )}
+              </TouchableOpacity>
 
-          {/* Invoice Button - Disabled when saving */}
-          <TouchableOpacity
-            style={[
-              styles.payButton,
-              saving && { opacity: 0.4 },
-            ]}
-            disabled={saving}
-            onPress={() =>
-              !saving && (params.isActive === 'true') &&
-              router.push({
-                pathname: '/payment',
-                params: {
-                  tableId: params.tableId,
-                  total: total.toFixed(2),
-                  stewardId: params.stewardId,
-                  cartItems: params.cartItems || JSON.stringify(items),
-                  isInvoice: 'true',
-                  isDone: 'false',
-                },
-              })
-            }
-          >
-            <Text style={styles.payText}>Invoice</Text>
-          </TouchableOpacity>
-        </View>
+              {/* Invoice Button - Disabled when isTakeAway or not isActive */}
+              <TouchableOpacity
+                style={[
+                  styles.payButton,
+                  (saving || !isActive || isTakeAway) && { opacity: 0.6 },
+                ]}
+                disabled={saving || !isActive || isTakeAway}
+                onPress={() =>
+                  router.push({
+                    pathname: '/payment',
+                    params: {
+                      tableId: params.tableId,
+                      total: total.toFixed(2),
+                      stewardId: params.stewardId,
+                      cartItems: params.cartItems || JSON.stringify(items),
+                      isInvoice: 'true',
+                      isDone: 'true',
+                    },
+                  })
+                }
+              >
+                <Text style={styles.payText}>Invoice</Text>
+              </TouchableOpacity>
+            </View>
 
-        {/* Pay Button - Disabled when saving */}
-        <TouchableOpacity
-          style={[
-            styles.payButton2,
-            saving && { opacity: 0.4 },
-          ]}
-          disabled={saving}
-          onPress={() =>
-            !saving &&
-            router.push({
-              pathname: '/payment',
-              params: {
-                tableId: params.tableId,
-                total: total.toFixed(2),
-                stewardId: params.stewardId,
-                cartItems: params.cartItems || JSON.stringify(items),
-              },
-            })
-          }
-        >
-          <Text style={styles.payText2}>Pay</Text>
-        </TouchableOpacity>
+            <View style={styles.buttonRow}>
+              {/* Hold Button - Only enabled when isTakeAway is true */}
+              <TouchableOpacity
+                style={[
+                  styles.holdButton,
+                  (saving || !isTakeAway) && { opacity: 0.6 },
+                ]}
+                onPress={handleHold}
+                disabled={saving || !isTakeAway}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" />
+                ) : (
+                  <Text style={styles.holdText}>Hold</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Pay Button */}
+              <TouchableOpacity
+                style={[
+                  styles.payButton,
+                  saving && { opacity: 0.6 },
+                ]}
+                disabled={saving}
+                onPress={() => {
+                  if (params.isTakeAway === "true") {
+                    router.push({
+                      pathname: '/payment',
+                      params: {
+                        tableId: params.tableId,
+                        total: total.toFixed(2),
+                        stewardId: params.stewardId,
+                        cartItems: params.cartItems || JSON.stringify(items),
+                        isTakeAway: "true",
+                        isTakeAwaySaved: "false",
+                      },
+                    })
+                  } else {
+                    router.push({
+                      pathname: '/payment',
+                      params: {
+                        tableId: params.tableId,
+                        total: total.toFixed(2),
+                        stewardId: params.stewardId,
+                        cartItems: params.cartItems || JSON.stringify(items),
+                        isTakeAway: "false",
+                      },
+                    })
+                  }
+                }
+                }
+              >
+                <Text style={styles.payText}>Pay</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          // Only show Pay button when isDone is true
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.payButton}
+              onPress={() => {
+                if (isTakeAway) {
+                  router.push({
+                    pathname: '/payment',
+                    params: {
+                      tableId: params.tableId,
+                      total: total.toFixed(2),
+                      stewardId: params.stewardId,
+                      cartItems: params.cartItems || JSON.stringify(items),
+                      isTakeAway: 'true',
+                    },
+                  });
+                } else {
+                  router.push({
+                    pathname: '/payment',
+                    params: {
+                      tableId: params.tableId,
+                      total: total.toFixed(2),
+                      stewardId: params.stewardId,
+                      cartItems: params.cartItems || JSON.stringify(items),
+                      isTakeAway: 'false',
+                    },
+                  });
+                }
+
+              }
+
+              }
+            >
+              <Text style={styles.payText}>Pay</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      {/* Bottom Nav (unchanged) */}
+      {/* Bottom Nav */}
       <View style={styles.bottomNav}>
         <NavButton label="Dining" icon="restaurant" route="/table" />
         <NavButton label="Take Away" icon="cafe" route="/takeaway" />
@@ -370,7 +505,7 @@ export default function BillScreen() {
         />
       </View>
 
-      {/* Quick Menu Modal (unchanged) */}
+      {/* Quick Menu Modal */}
       <Modal
         visible={quickMenuVisible}
         transparent
@@ -417,6 +552,7 @@ const NavButton = ({ label, icon, route, active = false, onPress }) => (
     <Text style={[styles.navText, active && { color: '#f57c00' }]}>{label}</Text>
   </TouchableOpacity>
 );
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f6f4f2' },

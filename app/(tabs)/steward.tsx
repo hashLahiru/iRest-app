@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Modal,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -14,19 +13,22 @@ import {
   View
 } from 'react-native';
 
+import NavBar from '@/components/NavButton';
+import QuickMenuModal from '@/components/QuickMenuModal';
+import SideMenuModal from '@/components/SideMenuModal';
+
 const StewardScreen = () => {
   // const navigation = useNavigation();
   const params = useGlobalSearchParams();
   const [modalVisible, setModalVisible] = useState(false);
+  const [quickMenuVisible, setQuickMenuVisible] = useState(false);
   const [stewards, setStewards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tableId, setTableId] = useState('');
 
 
   useEffect(() => {
-    // Get tableId from route params
     if (params?.tableId) {
-      // Ensure tableId is properly formatted with 'T' prefix
       const id = params.tableId.toString();
       setTableId(id);
     }
@@ -38,7 +40,7 @@ const StewardScreen = () => {
     const login_token = await AsyncStorage.getItem("login_token")
     try {
       setLoading(true);
-      const response = await fetch('http://raiza.digieclipse.com/App_apiv2/app_api', {
+      const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,10 +75,10 @@ const StewardScreen = () => {
   const handlePress = (steward) => {
     console.log("Selected Steward:", steward);
     router.push({
-      pathname: '/mainbilling',
+      pathname: '/mainbillingdinein',
       params: {
         stewardId: steward.id,
-        tableId: tableId
+        tableId: tableId,
       }
     });
   };
@@ -108,55 +110,7 @@ const StewardScreen = () => {
         </View>
       </View>
 
-      {/* Side Menu Modal */}
-      <Modal
-        transparent
-        visible={modalVisible}
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPressOut={() => setModalVisible(false)}
-        >
-          <View style={styles.sideMenu}>
-            <Text style={styles.menuTitle}>Menu</Text>
-
-            <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/profile'); }}>
-              <Text style={styles.menuItem}>Profile</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/summary'); }}>
-              <Text style={styles.menuItem}>Summary</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/history'); }}>
-              <Text style={styles.menuItem}>History</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/backoffice'); }}>
-              <Text style={styles.menuItem}>Back Office</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/settings'); }}>
-              <Text style={styles.menuItem}>Setting</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => { setModalVisible(false); router.push('/login'); }}>
-              <Text style={styles.menuItem}>Logout</Text>
-            </TouchableOpacity>
-
-            {/* Footer */}
-            <View style={styles.menuFooter}>
-              <Text style={styles.logoText}>
-                <Text style={styles.logoOrange}>i</Text>POS
-              </Text>
-              <Text style={styles.footerText}>Powered by introps IT</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      <SideMenuModal visible={modalVisible} onClose={() => setModalVisible(false)} />
 
       {/* Table No */}
       {tableId && (
@@ -189,26 +143,13 @@ const StewardScreen = () => {
         }
       />
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <NavButton label="Dining" icon="restaurant" route="/table" active />
-        <NavButton label="Take Away" icon="cafe" route="/takeaway" />
-        <NavButton label="Delivery" icon="car" route="/delivery" />
-        <NavButton label="Quick" icon="menu" route="/quick" />
-      </View>
+      <NavBar activeRoute="Dining" onQuickMenuPress={() => setQuickMenuVisible(true)} />
+      <QuickMenuModal visible={quickMenuVisible} onClose={() => setQuickMenuVisible(false)} />
+
     </SafeAreaView>
   );
 };
 
-// NavButton for Bottom Navigation
-const NavButton = ({ label, icon, route, active = false }) => (
-  <TouchableOpacity style={styles.navItemContainer} onPress={() => router.push(route)}>
-    <Ionicons name={icon} size={24} color={active ? '#f57c00' : '#ccc'} />
-    <Text style={[styles.navText, active && { color: '#f57c00' }]}>{label}</Text>
-  </TouchableOpacity>
-);
-
-// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
