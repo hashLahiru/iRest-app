@@ -21,8 +21,6 @@ export default function BillScreenDineIn() {
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
   const params = useGlobalSearchParams();
   const [saving, setSaving] = useState(false);
-  const [isTakeAway, setIsTakeAway] = useState(false);
-  const [isDone, setIsDone] = useState(false);
   const [orderStatus, setOrderStatus] = useState("");
 
   const [items, setItems] = useState<
@@ -57,7 +55,6 @@ export default function BillScreenDineIn() {
   };
 
   useEffect(() => {
-    console.log("BillScreenDineIn Recieved Parameters: ", params);
     const parsedCartItems = parseCartItems(params.cartItems);
     const mapped = parsedCartItems.map((item: any) => ({
       id: item.id,
@@ -90,7 +87,23 @@ export default function BillScreenDineIn() {
   };
 
   const removeItem = (index: number) => {
-    setItems(prev => prev.filter((_, i) => i !== index));
+    Alert.alert(
+      "Remove Item",
+      "Are you sure you want to remove this item from the order?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            setItems(prev => prev.filter((_, i) => i !== index));
+          }
+        }
+      ]
+    );
   };
 
   const total = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
@@ -118,7 +131,6 @@ export default function BillScreenDineIn() {
       });
 
       const json = await response.json();
-      console.log(json);
 
       if (json.status !== 'success') {
         Alert.alert('Fetch failed', json.message || 'Could not fetch active order.');
@@ -208,66 +220,6 @@ export default function BillScreenDineIn() {
     }
   };
 
-  const handleHold = async () => {
-    const login_token = await AsyncStorage.getItem('login_token');
-    const tableId = params.tableId ?? '';
-    const stewardId = String(params.stewardId ?? '').trim();
-
-    if (!tableId) {
-      Alert.alert('Missing info', 'Table ID is required.');
-      return;
-    }
-    if (items.length === 0) {
-      Alert.alert('No items', 'Please add at least one item before holding.');
-      return;
-    }
-
-    const payload = {
-      function: 'update_orders',
-      data: {
-        login_token: login_token,
-        table_id: tableId,
-        order_status: 'hold',
-        steward_id: stewardId || '',
-        order_total: Number(total),
-        smode: 'taway',
-        order_data: items.map(it => ({
-          id: String(it.id),
-          price: Number(it.rate),
-          quantity: Number(it.qty),
-        })),
-      },
-    };
-
-    try {
-      setSaving(true);
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok || (json?.status && json.status !== 'success')) {
-        const message =
-          (json && (json.message || json.error)) ||
-          `Request failed (${res.status})`;
-        Alert.alert('Hold failed', message);
-        return;
-      }
-
-      router.push({
-        pathname: '/takeaway',
-        params: { tableId: tableId, isRefresh: 'true' },
-      });
-    } catch (e: any) {
-      Alert.alert('Network error', e?.message || 'Failed to hold order.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -300,12 +252,13 @@ export default function BillScreenDineIn() {
           <Text style={[styles.tableHeaderQty, { flex: 1 }]}>Qty</Text>
           <Text style={[styles.tableHeaderText, { flex: 1 }]}>Rate</Text>
           <Text style={[styles.tableHeaderTotal, { flex: 1 }]}>Total</Text>
+          <View style={{ flex: 0.5 }} /> {/* Spacer for delete button */}
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false}>
           {items.map((item, index) => (
             <View key={item.id ?? index} style={styles.tableRow}>
-              <View style={styles.itemInfo}>
+              <View style={[styles.itemInfo, { flex: 2 }]}>
                 <Text style={styles.itemName}>
                   {(index + 1).toString().padStart(2, '0')} . {item.name}
                 </Text>
@@ -314,7 +267,7 @@ export default function BillScreenDineIn() {
                 )}
               </View>
 
-              <View style={styles.qtyControls}>
+              <View style={[styles.qtyControls, { flex: 1 }]}>
                 <TouchableOpacity onPress={() => updateQty(index, -1)}>
                   <Ionicons name="remove" size={18} color="#f57c00" />
                 </TouchableOpacity>
@@ -326,12 +279,16 @@ export default function BillScreenDineIn() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.rateText}>{item.rate}</Text>
-              <Text style={styles.totalText}>{item.qty * item.rate}</Text>
+              <Text style={[styles.rateText, { flex: 1, textAlign: 'center' }]}>{item.rate}</Text>
+              <Text style={[styles.totalText, { flex: 1, textAlign: 'center' }]}>{item.qty * item.rate}</Text>
 
-              <TouchableOpacity onPress={() => removeItem(index)} style={{ marginLeft: 10, padding: 4 }}>
-                <Ionicons name="trash" size={20} color="#f00" />
-              </TouchableOpacity>
+              {(orderStatus === "dinein_new") &&
+                <TouchableOpacity
+                  onPress={() => removeItem(index)}
+                  style={[styles.deleteButton, { flex: 0.5 }]}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#ff3b30" />
+                </TouchableOpacity>}
             </View>
           ))}
         </ScrollView>
@@ -357,169 +314,60 @@ export default function BillScreenDineIn() {
         </View>
 
         {/* Button Rows */}
-        {!isDone ? (
-          <>
-            <View style={styles.buttonRow}>
-              {/* Save Button - Disabled when isTakeAway or isActive is true */}
-              <TouchableOpacity
-                style={[
-                  styles.holdButton,
-                  (orderStatus !== "dinein_new") && { opacity: 0.6 },
-                ]}
-                onPress={handleSave}
-                disabled={orderStatus !== "dinein_new"}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text style={styles.holdText}>Save</Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Invoice Button - Disabled when isTakeAway or not isActive */}
-              <TouchableOpacity
-                style={[
-                  styles.payButton,
-                  (orderStatus !== "dinein_active") && { opacity: 0.6 },
-                ]}
-                disabled={orderStatus !== "dinein_active"}
-                onPress={() =>
-                  router.push({
-                    pathname: '/payment',
-                    params: {
-                      tableId: params.tableId,
-                      total: total.toFixed(2),
-                      stewardId: params.stewardId,
-                      cartItems: params.cartItems || JSON.stringify(items),
-                      orderStatus: "dinein_active",
-                    },
-                  })
-                }
-              >
-                <Text style={styles.payText}>Invoice</Text>
-              </TouchableOpacity>
-            </View>
-
-            {(orderStatus !== "dinein_new") && <View style={styles.buttonRow}>
-              {/* Hold Button - Only enabled when isTakeAway is true */}
-              <TouchableOpacity
-                style={[
-                  styles.holdButton,
-                  (saving || !isTakeAway) && { opacity: 0.6 },
-                ]}
-                onPress={handleHold}
-                disabled={saving || !isTakeAway}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text style={styles.holdText}>Hold</Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Pay Button */}
-              <TouchableOpacity
-                style={[
-                  styles.payButton,
-                  saving && { opacity: 0.6 },
-                ]}
-                disabled={saving}
-                onPress={() => {
-                  if (params.isTakeAway === "true") {
-                    router.push({
-                      pathname: '/payment',
-                      params: {
-                        tableId: params.tableId,
-                        total: total.toFixed(2),
-                        stewardId: params.stewardId,
-                        cartItems: params.cartItems || JSON.stringify(items),
-                        isTakeAway: "true",
-                        isTakeAwaySaved: "false",
-                      },
-                    })
-                  } else {
-                    router.push({
-                      pathname: '/payment',
-                      params: {
-                        tableId: params.tableId,
-                        total: total.toFixed(2),
-                        stewardId: params.stewardId,
-                        cartItems: params.cartItems || JSON.stringify(items),
-                        isTakeAway: "false",
-                      },
-                    })
-                  }
-                }
-                }
-              >
-                <Text style={styles.payText}>Pay</Text>
-              </TouchableOpacity>
-            </View>}
-
-          </>
-        ) : (
-          // Only show Pay button when isDone is true
+        <>
           <View style={styles.buttonRow}>
+            {/* Save Button - Disabled when isTakeAway or isActive is true */}
             <TouchableOpacity
-              style={styles.payButton}
-              onPress={() => {
-                if (isTakeAway) {
-                  router.push({
-                    pathname: '/payment',
-                    params: {
-                      tableId: params.tableId,
-                      total: total.toFixed(2),
-                      stewardId: params.stewardId,
-                      cartItems: params.cartItems || JSON.stringify(items),
-                      isTakeAway: 'true',
-                    },
-                  });
-                } else {
-                  router.push({
-                    pathname: '/payment',
-                    params: {
-                      tableId: params.tableId,
-                      total: total.toFixed(2),
-                      stewardId: params.stewardId,
-                      cartItems: params.cartItems || JSON.stringify(items),
-                      isTakeAway: 'false',
-                    },
-                  });
-                }
+              style={[
+                styles.holdButton,
+                (orderStatus !== "dinein_new") && { opacity: 0.6 },
+              ]}
+              onPress={handleSave}
+              disabled={orderStatus !== "dinein_new"}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Text style={styles.holdText}>Save</Text>
+              )}
+            </TouchableOpacity>
 
-              }
-
+            {/* Invoice Button - Disabled when isTakeAway or not isActive */}
+            <TouchableOpacity
+              style={[
+                styles.payButton,
+                (orderStatus !== "dinein_active") && { opacity: 0.6 },
+              ]}
+              disabled={orderStatus !== "dinein_active"}
+              onPress={() =>
+                router.push({
+                  pathname: '/payment',
+                  params: {
+                    tableId: params.tableId,
+                    total: total.toFixed(2),
+                    stewardId: params.stewardId,
+                    cartItems: params.cartItems || JSON.stringify(items),
+                    orderStatus: "dinein_active",
+                  },
+                })
               }
             >
-              <Text style={styles.payText}>Pay</Text>
+              <Text style={styles.payText}>Invoice</Text>
             </TouchableOpacity>
           </View>
-        )}
+        </>
       </View>
 
       {/* Bottom Nav */}
-      {/* <NavBar activeRoute="Dining" onQuickMenuPress={() => setQuickMenuVisible(true)} /> */}
       <QuickMenuModal visible={quickMenuVisible} onClose={() => setQuickMenuVisible(false)} />
     </SafeAreaView>
   );
 }
 
-const NavButton = ({ label, icon, route, active = false, onPress }) => (
-  <TouchableOpacity
-    style={styles.navItemContainer}
-    onPress={onPress || (() => router.push(route))}
-  >
-    <Ionicons name={icon} size={24} color={active ? '#f57c00' : '#ccc'} />
-    <Text style={[styles.navText, active && { color: '#f57c00' }]}>{label}</Text>
-  </TouchableOpacity>
-);
-
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f6f4f2' },
-
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', paddingTop: 30, paddingBottom: 16, paddingHorizontal: 20, },
-  headerTitle: { fontSize: 20, fontWeight: '600', color: '#222', right: 60 },
+  headerTitle: { fontSize: 20, fontWeight: '600', color: '#222', right: 50 },
   itemsContainer: { backgroundColor: '#fff', borderRadius: 12, paddingBottom: 8, flex: 1, },
   tableHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ececec', borderTopLeftRadius: 12, borderTopRightRadius: 12, paddingHorizontal: 15, paddingVertical: 10, },
   tableHeaderText: { fontWeight: '600', fontSize: 13, color: '#1c1c1c', },
@@ -553,6 +401,6 @@ const styles = StyleSheet.create({
   quickMenuModal: { backgroundColor: '#fff', paddingVertical: 20, paddingHorizontal: 10, borderTopLeftRadius: 20, borderTopRightRadius: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', },
   menuIconBox: { width: '30%', alignItems: 'center', marginVertical: 15, },
   menuLabel: { marginTop: 6, fontSize: 13, color: '#333', textAlign: 'center', },
-  tableNumberText: { backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 0, alignSelf: 'center', right: 100 },
-  deleteIcon: { marginLeft: 10, padding: 4, }
+  tableNumberText: { backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 0, alignSelf: 'center', left: 40 },
+  deleteButton: { alignItems: 'center', justifyContent: 'center', padding: 4 },
 });

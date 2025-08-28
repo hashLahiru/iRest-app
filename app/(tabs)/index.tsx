@@ -20,7 +20,7 @@ export default function SplashScreen() {
         const last_workday = await AsyncStorage.getItem('last_workday');
 
         if (!token) {
-          return router.replace('/login');
+          return router.push('/login');
         }
 
         const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
@@ -42,7 +42,7 @@ export default function SplashScreen() {
           }
           router.replace('/home');
         } else {
-          router.replace('/login');
+          router.push('/login');
         }
       } catch (err) {
         console.error('Login status check failed:', err);

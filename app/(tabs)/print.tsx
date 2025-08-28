@@ -1,11 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Buffer } from 'buffer';
 import { router, useGlobalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
-  Image,
-  Modal,
+  NativeModules,
+  PermissionsAndroid,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -14,74 +17,231 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const purchasedItems = [
-  { id: '001', name: 'Chicken Biryani', qty: 1, price: 1200 },
-  { id: '002', name: 'Lime Juice', qty: 2, price: 300 },
-  { id: '003', name: 'Chocolate Cake', qty: 1, price: 800 },
-];
+import PrinterModal from '@/components/PrinterModal';
+import SideMenuModal from '@/components/SideMenuModal';
+
+// Bluetooth Classic Native Module
+const BluetoothClassic = NativeModules.RNBluetoothClassic as any;
+
+async function requestBluetoothPermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+
+  if (Platform.Version >= 31) {
+    const granted = await PermissionsAndroid.requestMultiple([
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    ]);
+
+    return (
+      granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
+      granted['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
+      granted['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+    );
+  } else {
+    const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  }
+}
+
+interface Printer {
+  name: string;
+  address: string;
+  [k: string]: any;
+}
 
 export default function PrintScreen() {
-  const total = purchasedItems.reduce((sum, item) => sum + item.qty * item.price, 0);
   const [modalVisible, setModalVisible] = useState(false);
+  const [printerModalVisible, setPrinterModalVisible] = useState(false); // State for printer modal
   const [customerName, setCustomerName] = useState('');
   const [customerNumber, setCustomerNumber] = useState('');
-  const [orderId, setOrderId] = useState();
+  const [orderId, setOrderId] = useState('');
+  const [orderItems, setOrderItems] = useState([]);
+  const [tableId, setTableId] = useState('');
   const params = useGlobalSearchParams();
 
+  const [connectedPrinter, setConnectedPrinter] = useState<Printer | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [isModuleAvailable, setIsModuleAvailable] = useState(false);
+
+  const printStatus = params.printStatus;
+
   useEffect(() => {
-    setOrderId(params.orderId || '');
-    console.log("PrintScreen params:", params.orderId);
+    (async () => {
+      const saved = await AsyncStorage.getItem("connectedPrinter");
+      if (saved) {
+        const printer = JSON.parse(saved);
+        try {
+          const isStillConnected = await BluetoothClassic.isDeviceConnected(printer.address);
+          if (isStillConnected) {
+            setConnectedPrinter(printer);
+          } else {
+            const result = await BluetoothClassic.connectToDevice(printer.address, {
+              connectSecure: true,
+            });
+            if (result) {
+              setConnectedPrinter(printer);
+              console.log("Reconnected to printer:", printer.name);
+            } else {
+              await AsyncStorage.removeItem("connectedPrinter");
+              setConnectedPrinter(null);
+            }
+          }
+        } catch (err) {
+          console.error("Error checking connection:", err);
+          setConnectedPrinter(null);
+        }
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (BluetoothClassic) setIsModuleAvailable(true);
+    else Alert.alert('Error', 'Bluetooth module not available. Make sure react-native-bluetooth-classic is installed.');
+  }, []);
+
+  useEffect(() => {
+    console.log("Order Items Print:", params);
+
+    if (params.orderItems) {
+      try {
+        const parsedItems = JSON.parse(params.orderItems as string);
+        setOrderItems(parsedItems);
+        setOrderId(params.orderId || '');
+        setTableId(params.tableId || '');
+      } catch (err) {
+        console.error("Failed to parse orderItems:", params.orderItems);
+      }
+    }
   }, [params]);
 
+  const handlePrinterConnected = (printer: Printer | null) => {
+    setConnectedPrinter(printer);
+  };
+
   const handlePrintNow = async () => {
-    if (customerName.trim() === '' || customerNumber.trim() === '') {
-      Alert.alert("Validation Error", "Please enter both name and number");
+    if (!connectedPrinter) {
+      Alert.alert("No Printer", "Please connect to a printer first");
+      setPrinterModalVisible(true);
       return;
     }
 
-    if (customerNumber.trim().length !== 10 || !/^\d{10}$/.test(customerNumber)) {
-      Alert.alert("Invalid Number", "Customer number must be exactly 10 digits.");
-      return;
-    }
-
-    try {
-      const login_token = await AsyncStorage.getItem('login_token');
-      if (!login_token) {
-        Alert.alert("Error", "User not logged in");
+    if (printStatus === 'paid') {
+      if (customerName.trim() === '' || customerNumber.trim() === '') {
+        Alert.alert("Validation Error", "Please enter both name and number");
         return;
       }
 
-      const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          function: "save_customer_info",
-          data: {
-            login_token: login_token,
-            ts_id: orderId,
-            customer_name: customerName,
-            customer_phone: customerNumber
-          }
-        }),
-      });
-
-      const result = await response.json();
-      if (result.status === 'success') {
-        Alert.alert("Success", "Customer info saved successfully");
-        router.push({
-          pathname: '/table',
-          params: { isRefresh: 'true' }
-        });
-      } else {
-        Alert.alert("Error", result.message || "Failed to save customer info");
+      if (customerNumber.trim().length !== 10 || !/^\d{10}$/.test(customerNumber)) {
+        Alert.alert("Invalid Number", "Customer number must be exactly 10 digits.");
+        return;
       }
-    } catch (error) {
-      console.error("API error:", error);
-      Alert.alert("Error", "Network or server error");
+    }
+
+    setPrinting(true);
+
+    try {
+      const ESC = "\x1B";
+      const GS = "\x1D";
+
+      let itemsText = orderItems
+        .map((i: any) => {
+          const name = i.name?.length > 16 ? i.name.substring(0, 16) : i.name;
+          const variation = i.variation ? ` (${i.variation})` : '';
+
+          // Fallbacks for qty & price (works for both dinein & taway)
+          const qty = i.o_qty ?? i.quantity ?? 0;
+          const price = parseFloat(i.s_price ?? i.price ?? 0).toFixed(2);
+          const total = (Number(qty) * Number(i.s_price ?? i.price ?? 0)).toFixed(2);
+
+          return `${(name + variation).padEnd(16)} \n${qty} x ${price} = ${total}`;
+        })
+        .join("\n");
+
+      const subtotal = orderItems.reduce(
+        (sum: number, i: any) =>
+          sum +
+          (Number(i.o_qty ?? i.quantity ?? 0) *
+            Number(i.s_price ?? i.price ?? 0)),
+        0
+      );
+
+      const discount = parseFloat(params.orderDiscount || "0");
+      const serviceCharge = parseFloat(params.orderServiceCharge || "0");
+      const grandTotal = subtotal - discount + serviceCharge;
+      const paidAmount = parseFloat(params.paidAmount || "0");
+      const balance = grandTotal - paidAmount;
+
+      let commands = "";
+
+      if (printStatus === 'invoice') {
+        commands = [
+          ESC + "@", // Initialize
+          ESC + "a" + "\x01", // Center align
+          "**** iPOS INVOICE ****\n\n",
+          ESC + "a" + "\x00", // Left align
+          `Order ID : ${orderId}\n`,
+          `Table No : ${tableId}\n`,
+          "-------------------------------\n",
+          "Items\n",
+          "-------------------------------\n",
+          itemsText + "\n",
+          "-------------------------------\n",
+          `Subtotal       : ${subtotal.toFixed(2)}\n`,
+          `Discount       : ${discount.toFixed(2)}\n`,
+          `Service Charge : ${serviceCharge.toFixed(2)}\n`,
+          "-------------------------------\n",
+          GS + "V" + "\x41" + "\x10", // Partial cut
+        ].join("");
+      } else {
+        commands = [
+          ESC + "@", // Initialize
+          ESC + "a" + "\x01", // Center align
+          "**** iPOS BILL ****\n\n",
+          ESC + "a" + "\x00", // Left align
+          `Order ID : ${orderId}\n`,
+          `Customer : ${customerName}\n`,
+          `Phone    : ${customerNumber}\n`,
+          "-------------------------------\n",
+          "Items\n",
+          itemsText + "\n",
+          "-------------------------------\n",
+          `Subtotal       : ${subtotal.toFixed(2)}\n`,
+          `Discount       : ${discount.toFixed(2)}\n`,
+          `Service Charge : ${serviceCharge.toFixed(2)}\n`,
+          "-------------------------------\n",
+          `Grand Total    : ${grandTotal.toFixed(2)}\n`,
+          `Paid           : ${paidAmount.toFixed(2)}\n`,
+          `Balance        : ${balance.toFixed(2)}\n`,
+          "-------------------------------\n\n",
+          ESC + "a" + "\x01", // Center
+          "Thank you! Visit Again\n\n",
+          "Developed by Introps IT\n",
+          "+94755620353|introps@gmail.com\n\n",
+          GS + "V" + "\x41" + "\x10",
+        ].join("");
+      }
+
+      const base64Data = Buffer.from(commands, "ascii").toString("base64");
+      await BluetoothClassic.writeToDevice(connectedPrinter.address, base64Data);
+      // router.push({ pathname: '/table', params: { isRefresh: 'true' } });
+    } catch (err) {
+      console.error("[print]", err);
+      Alert.alert("Print Error", "Failed to print receipt");
+    } finally {
+      setPrinting(false);
     }
   };
+
+  if (!isModuleAvailable) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>Bluetooth module not available</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -102,43 +262,32 @@ export default function PrintScreen() {
       </View>
 
       {/* Side Menu Modal */}
-      <Modal
-        transparent
-        visible={modalVisible}
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
+      <SideMenuModal visible={modalVisible} onClose={() => setModalVisible(false)} />
+
+      {/* Printer connection section */}
+      <View style={styles.printerStatus}>
+        <Text>
+          {connectedPrinter ? `Connected to: ${connectedPrinter.name}` : "No printer connected"}
+        </Text>
         <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPressOut={() => setModalVisible(false)}
+          onPress={() => setPrinterModalVisible(true)}
+          style={styles.manageBtn}
         >
-          <View style={styles.sideMenu}>
-            {[
-              ['🏠 Home', '/table'],
-              ['📝 Task Manager', '/taskmanager'],
-              ['➕ Add Product', '/addproduct'],
-              ['👨‍🌾 Farmer', '/farmer'],
-              ['👤 User', '/user'],
-              ['🚪 Logout', '/logout'],
-            ].map(([label, route]) => (
-              <TouchableOpacity key={label} onPress={() => { setModalVisible(false); router.push(route); }}>
-                <Text style={styles.menuItem}>{label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Text style={styles.manageBtnText}>Manage Printers</Text>
         </TouchableOpacity>
-      </Modal>
-      <View style={styles.card}>
-        {/* Thank You Section */}
-        <View style={styles.thankYouContainer}>
-          <Image
-            source={require('../../assets/images/thankyou.png')} // 🔁 Replace with your image path
-            style={styles.thankYouImage}
-          />
-          <Text style={styles.thankYouText}>Thank You!</Text>
-        </View>
+      </View>
+
+      {/* Printer Modal */}
+      <PrinterModal
+        visible={printerModalVisible}
+        onClose={() => setPrinterModalVisible(false)}
+        onPrinterConnected={handlePrinterConnected}
+      />
+
+      {/* Receipt details section */}
+      {printStatus !== 'invoice' && (<View style={styles.card}>
         {/* Customer Fields */}
+
         <View style={styles.inputGroup}>
           <Text style={styles.inputLabel}>Customer Name</Text>
           <TextInput
@@ -154,150 +303,143 @@ export default function PrintScreen() {
             onChangeText={setCustomerNumber}
             keyboardType="phone-pad"
             style={styles.input}
+            maxLength={10}
           />
         </View>
 
-        {/* Buttons */}
-        <TouchableOpacity style={styles.printButton} onPress={handlePrintNow}>
-          <Ionicons name="print" size={20} color="#fff" />
-          <Text style={styles.printText}>Print Now</Text>
+      </View>
+      )}
+      {/* Buttons */}
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={[styles.printButton, !connectedPrinter && styles.printButtonDisabled]}
+          onPress={handlePrintNow}
+          disabled={printing || !connectedPrinter}
+        >
+          {printing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="print" size={20} color="#fff" />
+              <Text style={styles.printText}>Print Now</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.printButton, { backgroundColor: '#999', marginTop: 10 }]}
-          onPress={() => router.push({
-            pathname: '/table',
-            params: { isRefresh: 'true' },
-          })}
+          style={[styles.printButton, styles.closeButton]}
+          onPress={() => router.push({ pathname: '/table', params: { isRefresh: 'true' } })}
         >
           <Ionicons name="close" size={20} color="#fff" />
           <Text style={styles.printText}>Close</Text>
         </TouchableOpacity>
       </View>
-
     </SafeAreaView >
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 30,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    padding: 15,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1c1c1c',
-    right: 60,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   logoText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#222',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-
-  content: {
-    padding: 10,
-    paddingBottom: 100,
+  printerStatus: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#fff',
+    margin: 15,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  manageBtn: {
+    backgroundColor: '#f57c00',
+    padding: 8,
+    borderRadius: 4,
+  },
+  manageBtnText: {
+    color: '#fff',
+    fontSize: 12,
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 25,
-    elevation: 3,
-  },
-  invoice: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-  },
-  date: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 10,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#ddd',
-    marginVertical: 14,
+    margin: 15,
+    padding: 20,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   inputGroup: {
-    marginTop: 20,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#444',
-    marginBottom: 6,
-    marginTop: 10,
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    backgroundColor: '#fff',
+    borderColor: '#ddd',
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 15,
   },
-
   printButton: {
-    marginTop: 70,
-    backgroundColor: '#f57c00',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
+    backgroundColor: '#f57c00',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  printButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  closeButton: {
+    backgroundColor: '#333', borderRadius: 8,
   },
   printText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-    marginLeft: 8,
-  },
-  thankYouContainer: {
-    alignItems: 'center',
-    marginTop: 30,
-  },
-  thankYouText: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 70,
-    color: '#444',
-  },
-  thankYouImage: {
-    width: 150,
-    height: 150,
-    resizeMode: 'contain',
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    flexDirection: 'row',
-  },
-  sideMenu: {
-    width: 250,
-    backgroundColor: '#fff',
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    elevation: 5,
-  },
-  menuItem: {
-    fontSize: 18,
-    marginVertical: 12,
-    color: '#333',
+    fontWeight: 'bold',
+    marginLeft: 10,
   },
 });

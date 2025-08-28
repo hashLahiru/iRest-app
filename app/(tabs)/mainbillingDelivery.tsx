@@ -5,6 +5,7 @@ import { router, useGlobalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -20,7 +21,6 @@ const screenWidth = Dimensions.get('window').width;
 const numColumns = 2;
 const boxWidth = screenWidth / numColumns - 24;
 
-// Types for API response
 interface Variation {
   size: string;
   price: number;
@@ -107,7 +107,6 @@ export default function MainBillingDelivery() {
     fetchFoodData();
   }, []);
 
-  // Transform API data to match your existing structure
   const superCategories = foodData?.food_list.superCategories.map(sc => ({
     id: sc.id,
     name: sc.name
@@ -120,7 +119,6 @@ export default function MainBillingDelivery() {
       return acc;
     }, {} as Record<string, string[]>) : {};
 
-  // Add "All" category that combines all items
   if (foodData?.food_list.categories && superCategories.length > 0) {
     categories['all'] = [];
     Object.values(foodData.food_list.categories).forEach(catList => {
@@ -259,6 +257,11 @@ export default function MainBillingDelivery() {
         orderStatus: "delivery_new",
       }
     });
+
+    setSelectedItem(null);
+    setSelectedVariation(null);
+    setCartItems([]);
+    setQuantities({});
   };
 
   if (loading) {
@@ -299,7 +302,7 @@ export default function MainBillingDelivery() {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={styles.headerTitle}>Main Billing</Text>
           <View style={styles.tableNumberText}>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>{params.tableId}</Text>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>DEL</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -431,7 +434,7 @@ export default function MainBillingDelivery() {
 
             <TouchableOpacity
               style={styles.addButton}
-              onPress={addToCart}
+              onPress={selectedItem ? addToCart : undefined}
             >
               <Text style={styles.addButtonText}>Add to Cart</Text>
             </TouchableOpacity>
@@ -442,7 +445,7 @@ export default function MainBillingDelivery() {
       {/* Total Section */}
       <TouchableOpacity
         style={styles.totalBar}
-        onPress={navigateToBillScreen}
+        onPress={cartItems.length > 0 ? navigateToBillScreen : undefined}
       >
         <Text style={styles.totalLabel}>Total</Text>
         <Text style={styles.totalAmount}>{total.toFixed(2)} LKR</Text>
@@ -458,7 +461,7 @@ const styles = StyleSheet.create({
   tableNumberText: { backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 0, alignSelf: 'center', right: 50 },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
   logoText: { fontSize: 20, fontWeight: '700', color: '#222' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 10, padding: 10, borderRadius: 10, },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 10, padding: 8, borderRadius: 10, },
   searchIcon: { marginRight: 10 },
   searchText: { color: '#888', fontSize: 16 },
   tabsContainer: { marginBottom: 10, },
@@ -502,4 +505,5 @@ const styles = StyleSheet.create({
   loadingContainer: { justifyContent: 'center', alignItems: 'center', },
   errorContainer: { justifyContent: 'center', alignItems: 'center', padding: 20, },
   errorText: { color: 'red', marginBottom: 20, textAlign: 'center', },
+  searchInput: { flex: 1, fontSize: 14, color: '#333', height: 20 },
 });

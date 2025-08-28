@@ -5,6 +5,7 @@ import { router, useGlobalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -20,7 +21,6 @@ const screenWidth = Dimensions.get('window').width;
 const numColumns = 2;
 const boxWidth = screenWidth / numColumns - 24;
 
-// Types for API response
 interface Variation {
   size: string;
   price: number;
@@ -107,7 +107,6 @@ export default function MainBilling() {
     fetchFoodData();
   }, []);
 
-  // Transform API data to match your existing structure
   const superCategories = foodData?.food_list.superCategories.map(sc => ({
     id: sc.id,
     name: sc.name
@@ -120,7 +119,6 @@ export default function MainBilling() {
       return acc;
     }, {} as Record<string, string[]>) : {};
 
-  // Add "All" category that combines all items
   if (foodData?.food_list.categories && superCategories.length > 0) {
     categories['all'] = [];
     Object.values(foodData.food_list.categories).forEach(catList => {
@@ -257,9 +255,15 @@ export default function MainBilling() {
         cartItems: JSON.stringify(cartItems),
         total: total.toFixed(2),
         tableId: -1,
+        stewardId: params.stewardId || '-1',
         orderStatus: "taway_new",
       }
     });
+
+    setSelectedItem(null);
+    setSelectedVariation(null);
+    setCartItems([]);
+    setQuantities({});
   };
 
   if (loading) {
@@ -300,7 +304,7 @@ export default function MainBilling() {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={styles.headerTitle}>Main Billing</Text>
           <View style={styles.tableNumberText}>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>{params.tableId}</Text>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>TA</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -337,7 +341,7 @@ export default function MainBilling() {
                 setSelectedSuperCategory(tab.id);
                 setSelectedCategory(null);
                 setSelectedItem(null);
-                setSearchQuery(''); // Clear search when changing category
+                setSearchQuery('');
               }}
             >
               <Text style={[styles.tabText, selectedSuperCategory === tab.id && styles.tabTextActive]}>{tab.name}</Text>
@@ -433,7 +437,7 @@ export default function MainBilling() {
 
             <TouchableOpacity
               style={styles.addButton}
-              onPress={addToCart}
+              onPress={selectedItem ? addToCart : undefined}
             >
               <Text style={styles.addButtonText}>Add to Cart</Text>
             </TouchableOpacity>
@@ -442,10 +446,9 @@ export default function MainBilling() {
       </View>
 
       {/* Total Section */}
-
       <TouchableOpacity
         style={styles.totalBar}
-        onPress={navigateToBillScreen}
+        onPress={cartItems.length > 0 ? navigateToBillScreen : undefined}
       >
         <Text style={styles.totalLabel}>Total</Text>
         <Text style={styles.totalAmount}>{total.toFixed(2)} LKR</Text>
@@ -503,5 +506,7 @@ const styles = StyleSheet.create({
   totalBar: { position: 'absolute', bottom: 40, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 10, padding: 16, paddingVertical: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', },
   totalLabel: { color: '#fff', fontSize: 18, fontWeight: '600', },
   totalAmount: { color: '#fff', fontSize: 18, fontWeight: '700', },
-
+  loadingContainer: { justifyContent: 'center', alignItems: 'center', },
+  errorContainer: { justifyContent: 'center', alignItems: 'center', padding: 20, },
+  errorText: { color: 'red', marginBottom: 20, textAlign: 'center', },
 });

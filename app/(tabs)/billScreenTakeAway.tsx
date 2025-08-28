@@ -43,7 +43,6 @@ export default function BillScreenDineIn() {
           maybeDecoded = decodeURIComponent(str);
         }
       } catch {
-        // ignore decode errors
       }
 
       try {
@@ -58,7 +57,6 @@ export default function BillScreenDineIn() {
   };
 
   useEffect(() => {
-    console.log("BillScreenTakeAway Recieved Parameters: ", params);
     const parsedCartItems = parseCartItems(params.cartItems);
     const mapped = parsedCartItems.map((item: any) => ({
       id: item.id,
@@ -67,12 +65,7 @@ export default function BillScreenDineIn() {
       qty: Number(item.quantity) || 1,
       rate: Number(item.price) || 0,
     }));
-
     setItems(mapped);
-
-    if (orderStatus === "dinein_active") {
-      getActiveOrder();
-    }
   }, [params.cartItems, params.orderStatus]);
 
 
@@ -89,52 +82,6 @@ export default function BillScreenDineIn() {
   };
 
   const total = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
-
-  const getActiveOrder = async () => {
-    try {
-      const login_token = await AsyncStorage.getItem('login_token');
-      const tableId = params.tableId;
-
-      if (!login_token || !tableId) {
-        Alert.alert('Missing info', 'Login token or table ID missing');
-        return;
-      }
-
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          function: 'get_active_order',
-          data: {
-            login_token,
-            table_id: tableId,
-          },
-        }),
-      });
-
-      const json = await response.json();
-      console.log(json);
-
-      if (json.status !== 'success') {
-        Alert.alert('Fetch failed', json.message || 'Could not fetch active order.');
-        return;
-      }
-
-      const orderItems = json?.order?.order_items || [];
-      const mapped = orderItems.map((item: any) => ({
-        id: item.ris_id,
-        foodItemId: item.ris_id,
-        name: `${item.name} (${item.variation})`,
-        qty: Number(item.o_qty) || 1,
-        rate: Number(item.s_price) || 0,
-      }));
-
-      setItems(mapped);
-    } catch (e: any) {
-      console.error('getActiveOrder error:', e);
-      Alert.alert('Error', 'Could not load active order.');
-    }
-  };
 
   const handleHold = async () => {
     const login_token = await AsyncStorage.getItem('login_token');
@@ -209,7 +156,6 @@ export default function BillScreenDineIn() {
         <Text style={styles.headerTitle}>Main Billing</Text>
         <View style={styles.tableNumberText}>
           <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-            {params.tableId !== '-1' ? `T-${params.tableId}` : 'TA'}
           </Text>
         </View>
         <Ionicons name="menu" size={24} color="#000" />
@@ -248,12 +194,16 @@ export default function BillScreenDineIn() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.rateText}>{item.rate}</Text>
-              <Text style={styles.totalText}>{item.qty * item.rate}</Text>
+              <Text style={[styles.rateText, { flex: 1, textAlign: 'center' }]}>{item.rate}</Text>
+              <Text style={[styles.totalText, { flex: 1, textAlign: 'center' }]}>{item.qty * item.rate}</Text>
 
-              <TouchableOpacity onPress={() => removeItem(index)} style={{ marginLeft: 10, padding: 4 }}>
-                <Ionicons name="trash" size={20} color="#f00" />
-              </TouchableOpacity>
+              {(orderStatus === "taway_new") &&
+                <TouchableOpacity
+                  onPress={() => removeItem(index)}
+                  style={[styles.deleteButton, { flex: 0.5 }]}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#ff3b30" />
+                </TouchableOpacity>}
             </View>
           ))}
         </ScrollView>
@@ -309,10 +259,10 @@ export default function BillScreenDineIn() {
                   tableId: params.tableId,
                   total: total.toFixed(2),
                   stewardId: params.stewardId,
-                  cartItems: params.cartItems || JSON.stringify(items),
+                  cartItems: params.cartItems,   // ✅ remove extra stringify
                   orderStatus: "taway_new"
                 },
-              })
+              });
             }
             }
           >
@@ -375,5 +325,6 @@ const styles = StyleSheet.create({
   menuIconBox: { width: '30%', alignItems: 'center', marginVertical: 15, },
   menuLabel: { marginTop: 6, fontSize: 13, color: '#333', textAlign: 'center', },
   tableNumberText: { backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 0, alignSelf: 'center', right: 100 },
-  deleteIcon: { marginLeft: 10, padding: 4, }
+  deleteIcon: { marginLeft: 10, padding: 4, },
+  deleteButton: { alignItems: 'center', justifyContent: 'center', padding: 4 },
 });

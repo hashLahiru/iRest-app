@@ -87,7 +87,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.irest"
+    namespace 'com.hasinthalahiru.iRest'
     defaultConfig {
         applicationId 'com.hasinthalahiru.iRest'
         minSdkVersion rootProject.ext.minSdkVersion

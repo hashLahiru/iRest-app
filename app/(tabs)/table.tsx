@@ -174,20 +174,6 @@ const TableScreen = () => {
     );
 };
 
-const NavButton = ({ label, icon, route, onPress, active = false }) => (
-    <TouchableOpacity
-        style={styles.navItem}
-        onPress={onPress || (() => router.push(route))}
-    >
-        <Ionicons
-            name={icon}
-            size={24}
-            color={active ? '#f57c00' : '#ccc'}
-        />
-        <Text style={[styles.navText, active && { color: '#f57c00' }]}>{label}</Text>
-    </TouchableOpacity>
-);
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,

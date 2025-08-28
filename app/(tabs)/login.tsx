@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -19,6 +20,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -101,14 +103,26 @@ export default function LoginScreen() {
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder=""
-            secureTextEntry
-            placeholderTextColor="#aaa"
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder=""
+              placeholderTextColor="#aaa"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword} // 👈 toggle here
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeIcon}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off" : "eye"} // 👈 change icon
+                size={22}
+                color="#666"
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity>
             <Text style={styles.forgot}>Forgot Password</Text>
@@ -145,128 +159,28 @@ export default function LoginScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f6f4f2',
-  },
-  imageBackground: {
-    height: '80%',
-    justifyContent: 'flex-end',
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 50,
-    borderBottomRightRadius: 50,
-    overflow: 'hidden',
-  },
-  logoContainer: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    alignItems: 'flex-end',
-  },
-  logo: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  website: {
-    fontSize: 12,
-    color: '#fff',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-
-  formContainer: {
-    position: 'absolute',
-    top: '48%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#f6f4f2',
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 50,
-    paddingHorizontal: 24,
-    paddingTop: 30,
-    paddingBottom: 40,
-    marginBottom: 20,
-  },
-  welcome: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1c1c1c',
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    color: '#222',
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    marginBottom: 18,
-    color: '#000',
-  },
-  forgot: {
-    fontSize: 13,
-    color: '#999',
-    textAlign: 'right',
-    marginBottom: 20,
-  },
-  loginButton: {
-    backgroundColor: '#1c1c1c',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  loginText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  }, modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginHorizontal: 30,
-  },
-  modalText: {
-    fontSize: 16,
-    marginBottom: 15,
-    color: '#000',
-    textAlign: 'center',
-  },
-  modalButton: {
-    backgroundColor: '#1c1c1c',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: '#f6f4f2', },
+  imageBackground: { height: '80%', justifyContent: 'flex-end', paddingBottom: 30, paddingHorizontal: 20, borderBottomLeftRadius: 50, borderBottomRightRadius: 50, overflow: 'hidden', },
+  logoContainer: { position: 'absolute', top: 40, right: 20, alignItems: 'flex-end', },
+  logo: { fontSize: 24, color: '#fff', fontWeight: 'bold', },
+  website: { fontSize: 12, color: '#fff', },
+  dotsContainer: { flexDirection: 'row', gap: 8, },
+  dot: { width: 10, height: 10, borderRadius: 5, },
+  formContainer: { position: 'absolute', top: '48%', left: 0, right: 0, backgroundColor: '#f6f4f2', borderTopLeftRadius: 0, borderTopRightRadius: 50, paddingHorizontal: 24, paddingTop: 30, paddingBottom: 40, marginBottom: 20, },
+  welcome: { fontSize: 22, fontWeight: '700', color: '#1c1c1c', marginBottom: 24, },
+  label: { fontSize: 14, color: '#222', marginBottom: 6, },
+  input: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, fontSize: 15, marginBottom: 18, color: '#000', },
+  forgot: { fontSize: 13, color: '#999', textAlign: 'right', marginBottom: 20, },
+  loginButton: { backgroundColor: '#1c1c1c', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 20, },
+  loginText: { color: '#fff', fontSize: 16, fontWeight: '600', },
+  helperText: { fontSize: 12, color: '#666', textAlign: 'center', },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', },
+  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 12, alignItems: 'center', marginHorizontal: 30, },
+  modalText: { fontSize: 16, marginBottom: 15, color: '#000', textAlign: 'center', },
+  modalButton: { backgroundColor: '#1c1c1c', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, },
+  modalButtonText: { color: '#fff', fontWeight: '600', },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, marginBottom: 18, paddingHorizontal: 10, },
+  passwordInput: { flex: 1, paddingVertical: 14, paddingHorizontal: 6, fontSize: 15, color: '#000', },
+  eyeIcon: { padding: 8, },
 });

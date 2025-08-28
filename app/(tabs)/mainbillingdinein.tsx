@@ -5,6 +5,7 @@ import { router, useGlobalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -12,7 +13,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,7 +21,6 @@ const screenWidth = Dimensions.get('window').width;
 const numColumns = 2;
 const boxWidth = screenWidth / numColumns - 24;
 
-// Types for API response
 interface Variation {
   size: string;
   price: number;
@@ -274,6 +274,10 @@ export default function MainBillingDineIn() {
         orderStatus: 'dinein_new',
       }
     });
+    setSelectedItem(null);
+    setSelectedVariation(null);
+    setCartItems([]);
+    setQuantities({});
   };
 
   if (loading) {
@@ -434,8 +438,7 @@ export default function MainBillingDineIn() {
                       <TouchableOpacity
                         style={styles.qtyButtonOrange}
                         onPress={() => {
-                          // You no longer need setSelectedVariation here
-                          increment(key);                 // ✅ increments by ris_id
+                          increment(key);
                         }}
                       >
                         <Text style={styles.qtyIconWhite}>+</Text>
@@ -448,7 +451,7 @@ export default function MainBillingDineIn() {
 
             <TouchableOpacity
               style={styles.addButton}
-              onPress={addToCart}
+              onPress={selectedItem ? addToCart : undefined}
             >
               <Text style={styles.addButtonText}>Add to Cart</Text>
             </TouchableOpacity>
@@ -459,7 +462,7 @@ export default function MainBillingDineIn() {
       {/* Total Section */}
       <TouchableOpacity
         style={styles.totalBar}
-        onPress={navigateToBillScreen}
+        onPress={cartItems.length > 0 ? navigateToBillScreen : undefined}
       >
         <Text style={styles.totalLabel}>Total</Text>
         <Text style={styles.totalAmount}>{total.toFixed(2)} LKR</Text>
@@ -516,4 +519,7 @@ const styles = StyleSheet.create({
   totalBar: { position: 'absolute', bottom: 40, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 10, padding: 16, paddingVertical: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', },
   totalLabel: { color: '#fff', fontSize: 18, fontWeight: '600', },
   totalAmount: { color: '#fff', fontSize: 18, fontWeight: '700', },
+  loadingContainer: { justifyContent: 'center', alignItems: 'center', },
+  errorContainer: { justifyContent: 'center', alignItems: 'center', padding: 20, },
+  errorText: { color: 'red', marginBottom: 20, textAlign: 'center', },
 });
