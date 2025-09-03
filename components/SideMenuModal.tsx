@@ -28,8 +28,6 @@ const SideMenuModal: React.FC<SideMenuModalProps> = ({ visible, onClose }) => {
             ['Profile', '/profile'],
             ['Summary', '/daysummary'],
             ['History', '/saleshistory'],
-            ['Back Office', '/backoffice'],
-            ['Setting', '/settings'],
             ['Logout', '/login'],
           ].map(([label, path]) => (
             <TouchableOpacity key={label} onPress={() => { onClose(); router.push(path); }}>

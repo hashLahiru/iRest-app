@@ -20,7 +20,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import PrinterModal from '@/components/PrinterModal';
 import SideMenuModal from '@/components/SideMenuModal';
 
-// Bluetooth Classic Native Module
 const BluetoothClassic = NativeModules.RNBluetoothClassic as any;
 
 async function requestBluetoothPermissions(): Promise<boolean> {
@@ -58,6 +57,8 @@ export default function PrintScreen() {
   const [orderId, setOrderId] = useState('');
   const [orderItems, setOrderItems] = useState([]);
   const [tableId, setTableId] = useState('');
+  const [parsedOrderItems, setParsedOrderItems] = useState<any[]>([]);
+
   const params = useGlobalSearchParams();
 
   const [connectedPrinter, setConnectedPrinter] = useState<Printer | null>(null);
@@ -67,6 +68,7 @@ export default function PrintScreen() {
   const printStatus = params.printStatus;
 
   useEffect(() => {
+    console.log("Received Print Params:", params);
     (async () => {
       const saved = await AsyncStorage.getItem("connectedPrinter");
       if (saved) {
@@ -93,7 +95,7 @@ export default function PrintScreen() {
         }
       }
     })();
-  }, []);
+  }, [params]);
 
   useEffect(() => {
     if (BluetoothClassic) setIsModuleAvailable(true);
@@ -101,19 +103,40 @@ export default function PrintScreen() {
   }, []);
 
   useEffect(() => {
-    console.log("Order Items Print:", params);
+    console.log("Received Print Params:", params);
 
     if (params.orderItems) {
       try {
-        const parsedItems = JSON.parse(params.orderItems as string);
-        setOrderItems(parsedItems);
-        setOrderId(params.orderId || '');
-        setTableId(params.tableId || '');
+        let items = params.orderItems;
+
+        if (typeof items === 'string') {
+          let itemsString = items;
+
+          if (itemsString.startsWith('"') && itemsString.endsWith('"')) {
+            itemsString = itemsString.slice(1, -1);
+          }
+
+          itemsString = itemsString.replace(/\\"/g, '"');
+
+          const parsed = JSON.parse(itemsString);
+          setParsedOrderItems(Array.isArray(parsed) ? parsed : []);
+          setOrderItems(parsed);
+        } else {
+          setParsedOrderItems(Array.isArray(items) ? items : []);
+          setOrderItems(items);
+        }
+
+        setOrderId(params.orderId?.toString() || '');
+        setTableId(params.tableId?.toString() || '');
+
+        console.log("Successfully parsed order items:", parsedOrderItems);
+
       } catch (err) {
-        console.error("Failed to parse orderItems:", params.orderItems);
+        console.error("Failed to parse orderItems:", params.orderItems, err);
+        setParsedOrderItems([]);
       }
     }
-  }, [params]);
+  }, [params.orderItems, params.orderId, params.tableId]);
 
   const handlePrinterConnected = (printer: Printer | null) => {
     setConnectedPrinter(printer);
@@ -144,90 +167,174 @@ export default function PrintScreen() {
       const ESC = "\x1B";
       const GS = "\x1D";
 
-      let itemsText = orderItems
-        .map((i: any) => {
-          const name = i.name?.length > 16 ? i.name.substring(0, 16) : i.name;
-          const variation = i.variation ? ` (${i.variation})` : '';
+      // For 58mm printers, maximum characters per line is typically 32
+      const MAX_LINE_LENGTH = 32;
+      const MAX_ITEM_NAME_LENGTH = MAX_LINE_LENGTH; // Use full width for item names
 
-          // Fallbacks for qty & price (works for both dinein & taway)
-          const qty = i.o_qty ?? i.quantity ?? 0;
-          const price = parseFloat(i.s_price ?? i.price ?? 0).toFixed(2);
-          const total = (Number(qty) * Number(i.s_price ?? i.price ?? 0)).toFixed(2);
+      const itemsText = parsedOrderItems && parsedOrderItems.length > 0
+        ? parsedOrderItems
+          .map((i) => {
+            const name = i.name || 'Unknown Item';
+            const qty = i.qty ?? i.quantity ?? i.o_qty ?? 1;
+            const price = parseFloat(i.rate ?? i.price ?? i.s_price ?? 0).toFixed(2);
+            const total = (Number(qty) * Number(i.rate ?? i.price ?? i.s_price ?? 0)).toFixed(2);
 
-          return `${(name + variation).padEnd(16)} \n${qty} x ${price} = ${total}`;
-        })
-        .join("\n");
+            const variation = i.variation ? ` (${i.variation})` : '';
+            let itemName = name + variation;
 
-      const subtotal = orderItems.reduce(
-        (sum: number, i: any) =>
-          sum +
-          (Number(i.o_qty ?? i.quantity ?? 0) *
-            Number(i.s_price ?? i.price ?? 0)),
-        0
-      );
+            // Truncate item name if too long (using full line width)
+            if (itemName.length > MAX_ITEM_NAME_LENGTH) {
+              itemName = itemName.substring(0, MAX_ITEM_NAME_LENGTH - 3) + '...';
+            }
 
-      const discount = parseFloat(params.orderDiscount || "0");
-      const serviceCharge = parseFloat(params.orderServiceCharge || "0");
-      const grandTotal = subtotal - discount + serviceCharge;
-      const paidAmount = parseFloat(params.paidAmount || "0");
-      const balance = grandTotal - paidAmount;
+            // First line: item name (full width)
+            const itemLine = itemName + "\n";
+
+            // Second line: quantity, price, and total (right aligned)
+            const detailLine = `  ${qty} x ${price} = ${total}`.padStart(MAX_LINE_LENGTH);
+
+            return itemLine + detailLine;
+          })
+          .join("\n")
+        : "No items available";
+
+      let subtotal = 0;
+      if (parsedOrderItems && parsedOrderItems.length > 0) {
+        subtotal = parsedOrderItems.reduce(
+          (sum, i) => {
+            const qty = i.qty ?? i.quantity ?? i.o_qty ?? 1;
+            const price = i.rate ?? i.price ?? i.s_price ?? 0;
+            return sum + (Number(qty) * Number(price));
+          },
+          0
+        );
+      } else {
+        subtotal = parseFloat(params.totalSale?.toString() || "0");
+        console.log("Using subtotal from params:", subtotal);
+      }
+
+      const discount = parseFloat(params.orderDiscount?.toString() || "0");
+      const serviceCharge = parseFloat(params.serviceCharge?.toString() || "0");
+      const deliveryFee = parseFloat(params.deliveryFee?.toString() || "0");
+
+      let grandTotal = parseFloat(params.grandTotal?.toString() || "0");
+      if (grandTotal === 0) {
+        grandTotal = subtotal + serviceCharge + deliveryFee - discount;
+      }
+
+      const paidAmount = parseFloat(params.paidAmount?.toString() || "0");
+      const balance = parseFloat(params.orderBalance?.toString() || "0");
+
+      console.log("Printing values:", {
+        subtotal,
+        discount,
+        serviceCharge,
+        deliveryFee,
+        grandTotal,
+        paidAmount,
+        balance,
+        items: parsedOrderItems,
+        itemCount: parsedOrderItems?.length || 0
+      });
+
+      // Helper function to format amount lines with proper alignment
+      const formatAmountLine = (label: string, value: number, isBold = false) => {
+        const labelPart = label.padEnd(16); // Fixed width for labels
+        const valuePart = value.toFixed(2).padStart(MAX_LINE_LENGTH - 16);
+        let line = labelPart + valuePart + "\n";
+
+        // Apply bold formatting if requested
+        if (isBold) {
+          line = ESC + "!" + "\x08" + line + ESC + "!" + "\x00";
+        }
+
+        return line;
+      };
 
       let commands = "";
 
       if (printStatus === 'invoice') {
+        let chargesSection = formatAmountLine("Subtotal", subtotal);
+        if (discount > 0) {
+          chargesSection += formatAmountLine("Discount", discount);
+        }
+        if (serviceCharge > 0) {
+          chargesSection += formatAmountLine("Service Charge", serviceCharge);
+        }
+        if (deliveryFee > 0) {
+          chargesSection += formatAmountLine("Delivery Fee", deliveryFee);
+        }
+
+        // Add separator before grand total
+        chargesSection += "-".repeat(MAX_LINE_LENGTH) + "\n";
+
+        // Make only Grand Total bold
+        chargesSection += formatAmountLine("GRAND TOTAL", grandTotal, true);
+
         commands = [
-          ESC + "@", // Initialize
-          ESC + "a" + "\x01", // Center align
+          ESC + "@", // Initialize printer
+          ESC + "a" + "\x01", // Center alignment
           "**** iPOS INVOICE ****\n\n",
-          ESC + "a" + "\x00", // Left align
+          ESC + "a" + "\x00", // Left alignment
           `Order ID : ${orderId}\n`,
           `Table No : ${tableId}\n`,
-          "-------------------------------\n",
+          "-".repeat(MAX_LINE_LENGTH) + "\n",
           "Items\n",
-          "-------------------------------\n",
+          "-".repeat(MAX_LINE_LENGTH) + "\n",
           itemsText + "\n",
-          "-------------------------------\n",
-          `Subtotal       : ${subtotal.toFixed(2)}\n`,
-          `Discount       : ${discount.toFixed(2)}\n`,
-          `Service Charge : ${serviceCharge.toFixed(2)}\n`,
-          "-------------------------------\n",
-          GS + "V" + "\x41" + "\x10", // Partial cut
+          "-".repeat(MAX_LINE_LENGTH) + "\n",
+          chargesSection,
+          "-".repeat(MAX_LINE_LENGTH) + "\n",
+          GS + "V" + "\x41" + "\x10", // Cut paper
         ].join("");
       } else {
+        let chargesSection = formatAmountLine("Subtotal", subtotal);
+        if (discount > 0) {
+          chargesSection += formatAmountLine("Discount", discount);
+        }
+        if (serviceCharge > 0) {
+          chargesSection += formatAmountLine("Service Charge", serviceCharge);
+        }
+        if (deliveryFee > 0) {
+          chargesSection += formatAmountLine("Delivery Fee", deliveryFee);
+        }
+
+        // Add separator before grand total
+        chargesSection += "-".repeat(MAX_LINE_LENGTH) + "\n";
+
         commands = [
-          ESC + "@", // Initialize
-          ESC + "a" + "\x01", // Center align
+          ESC + "@", // Initialize printer
+          ESC + "a" + "\x01", // Center alignment
           "**** iPOS BILL ****\n\n",
-          ESC + "a" + "\x00", // Left align
+          ESC + "a" + "\x00", // Left alignment
           `Order ID : ${orderId}\n`,
           `Customer : ${customerName}\n`,
           `Phone    : ${customerNumber}\n`,
-          "-------------------------------\n",
+          "-".repeat(MAX_LINE_LENGTH) + "\n",
           "Items\n",
+          "-".repeat(MAX_LINE_LENGTH) + "\n",
           itemsText + "\n",
-          "-------------------------------\n",
-          `Subtotal       : ${subtotal.toFixed(2)}\n`,
-          `Discount       : ${discount.toFixed(2)}\n`,
-          `Service Charge : ${serviceCharge.toFixed(2)}\n`,
-          "-------------------------------\n",
-          `Grand Total    : ${grandTotal.toFixed(2)}\n`,
-          `Paid           : ${paidAmount.toFixed(2)}\n`,
-          `Balance        : ${balance.toFixed(2)}\n`,
-          "-------------------------------\n\n",
-          ESC + "a" + "\x01", // Center
+          "-".repeat(MAX_LINE_LENGTH) + "\n",
+          chargesSection,
+          // Make only Grand Total bold, keep Paid and Balance normal
+          formatAmountLine("GRAND TOTAL", grandTotal, true),
+          formatAmountLine("Paid", paidAmount),
+          formatAmountLine("Balance", balance),
+          "-".repeat(MAX_LINE_LENGTH) + "\n\n",
+          ESC + "a" + "\x01", // Center alignment
           "Thank you! Visit Again\n\n",
           "Developed by Introps IT\n",
-          "+94755620353|introps@gmail.com\n\n",
-          GS + "V" + "\x41" + "\x10",
+          "+94 71 150 0200\n\n",
+          GS + "V" + "\x41" + "\x10", // Cut paper
         ].join("");
       }
 
       const base64Data = Buffer.from(commands, "ascii").toString("base64");
       await BluetoothClassic.writeToDevice(connectedPrinter.address, base64Data);
-      // router.push({ pathname: '/table', params: { isRefresh: 'true' } });
+      router.push({ pathname: '/table', params: { isRefresh: 'true' } });
     } catch (err) {
       console.error("[print]", err);
-      Alert.alert("Print Error", "Failed to print receipt");
+      Alert.alert("Print Error", "Failed to print receipt: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setPrinting(false);
     }
@@ -247,9 +354,6 @@ export default function PrintScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/table')}>
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Print Receipt</Text>
         <View style={styles.headerRight}>
           <Text style={styles.logoText}>
@@ -338,6 +442,7 @@ export default function PrintScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -364,6 +469,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+    marginLeft: 15,
   },
   headerRight: {
     flexDirection: 'row',

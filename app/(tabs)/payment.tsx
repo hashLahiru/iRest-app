@@ -30,7 +30,7 @@ export default function PaymentScreen() {
   const [isPrinting, setIsPrinting] = useState(false);
   const params = useGlobalSearchParams();
 
-  const [totalSale, setTotalSale] = useState(8500);
+  const [totalSale, setTotalSale] = useState(0); // Changed from 8500 to 0
   const [otherCharges, setOtherCharges] = useState(0);
   const [serviceCharge, setServiceCharge] = useState(0);
   const [grandTotal, setGrandTotal] = useState(0);
@@ -39,12 +39,31 @@ export default function PaymentScreen() {
   const [paidAmount, setPaidAmount] = useState(0);
   const [orderId, setOrderId] = useState('');
   const [orderItems, setOrderItems] = useState([]);
+  const [deliveryFee, setDeliveryFee] = useState(0);
   const hasInitialized = useRef(false);
 
   const orderStatus = Array.isArray(params.orderStatus)
     ? params.orderStatus[0]
     : params.orderStatus ?? '';
-  console.log("Payment OrderStatus : ", orderStatus);
+
+  // Reset all states when params change
+  const resetStates = useCallback(() => {
+    setTotalSale(0);
+    setOtherCharges(0);
+    setServiceCharge(0);
+    setDeliveryFee(0); // Add this line
+    setGrandTotal(0);
+    setBalance(0);
+    setDiscountAmount(0);
+    setPaidAmount(0);
+    setOrderId('');
+    setOrderItems([]);
+    setSelectedMethod('Cash');
+    setSelectedDiscount('0%');
+    setCash('0');
+    setCard('0');
+    setCardNumber('');
+  }, []);
 
   const handleMethodSelection = (method) => {
     setSelectedMethod(method);
@@ -92,14 +111,59 @@ export default function PaymentScreen() {
     }
   }, [cash, grandTotal, selectedMethod]);
 
+  function safeParseCartItems(raw) {
+    console.log("safeParseCartItems input:", raw);
+
+    if (!raw) {
+      console.log("No raw data provided");
+      return [];
+    }
+
+    // If it's already an array, return it
+    if (Array.isArray(raw)) {
+      console.log("Already an array:", raw);
+      return raw;
+    }
+
+    try {
+      // If it's already JSON stringified array
+      const parsed = JSON.parse(raw);
+      console.log("Successfully parsed JSON:", parsed);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err1) {
+      try {
+        // If it's double-stringified (wrapped in quotes)
+        const doubleParsed = JSON.parse(JSON.parse(raw));
+        console.log("Successfully double-parsed JSON:", doubleParsed);
+        return Array.isArray(doubleParsed) ? doubleParsed : [];
+      } catch (err2) {
+        try {
+          // Replace escaped quotes
+          const escapedParsed = JSON.parse(raw.replace(/\\"/g, '"'));
+          console.log("Successfully parsed escaped JSON:", escapedParsed);
+          return Array.isArray(escapedParsed) ? escapedParsed : [];
+        } catch (err3) {
+          console.error("Failed to parse cartItems:", raw);
+          console.error("Errors:", err1, err2, err3);
+          return [];
+        }
+      }
+    }
+  }
+
   useFocusEffect(
     useCallback(() => {
       const fetchData = async () => {
-        if (!hasInitialized.current) {
-          hasInitialized.current = true;
-          const login_token = await AsyncStorage.getItem('login_token');
+        console.log("fetchData called with orderStatus:", orderStatus);
+        console.log("All params:", params);
 
-          if (orderStatus === "taway_hold") {
+        // Reset states first
+        resetStates();
+
+        const login_token = await AsyncStorage.getItem('login_token');
+
+        if (orderStatus === "taway_hold") {
+          try {
             const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -110,6 +174,7 @@ export default function PaymentScreen() {
             });
 
             const data = await response.json();
+            console.log("taway_hold API response:", data);
 
             setOrderId(data.order.ts_id);
             setTotalSale(parseFloat(data?.order?.order_total || 0));
@@ -117,58 +182,129 @@ export default function PaymentScreen() {
             setServiceCharge(parseFloat(data?.order?.service_charge || 0));
             setGrandTotal(parseFloat(data?.order?.grand_total || 0));
             setOtherCharges(parseFloat(data?.order?.service_charge || 0));
-          } else if (orderStatus === "taway_new") {
-            try {
-              console.log("Parsed cart items Raw:", params.cartItems);
 
-              const total = parseFloat(params.total || "0");
-              setTotalSale(total);
-              setDiscountAmount(0);
-              setServiceCharge(0);
-              setGrandTotal(total);
-              setOtherCharges(0);
+            // Set order items if available in the response
+            if (data.order.order_items && Array.isArray(data.order.order_items)) {
+              setOrderItems(data.order.order_items);
+              console.log("taway_hold order items:", data.order.order_items);
+            } else {
+              console.log("No order_items found in taway_hold response, trying to fetch order details...");
 
-              const parsedCart = JSON.parse(params.cartItems || "[]");
-              setOrderItems(parsedCart);
+              // Try to fetch order items using the same function as dine-in orders
+              try {
+                const detailResponse = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    function: "get_active_order",
+                    data: {
+                      login_token,
+                      table_id: "-1", // Use -1 for takeaway
+                      ts_id: params.orderId, // Add ts_id to get specific order
+                    }
+                  }),
+                });
 
-              console.log("Parsed cart items:", parsedCart); // ✅ log parsedCart not orderItems
+                const detailData = await detailResponse.json();
+                console.log("Additional order detail response:", detailData);
 
-              const orderData = parsedCart.map(item => ({
-                id: item.id, // ris_id
-                price: Number(item.price),
-                quantity: Number(item.quantity),
-              }));
-
-              console.log("Final orderData being sent:", orderData);
-              const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  function: "update_orders",
-                  data: {
-                    login_token,
-                    table_id: "-1",
-                    order_status: "act",
-                    steward_id: "-1",
-                    smode: "taway",
-                    order_data: orderData,
-                    printStatus: "paid"
-                  },
-                }),
-              });
-
-              const data = await response.json();
-              if (data.status === "success" && data.response?.ts_id) {
-                setOrderId(data.response.ts_id);
-              } else {
-                console.log(data);
-                Alert.alert("Error", "Failed to create takeaway order");
+                if (detailData.order && detailData.order.order_items && Array.isArray(detailData.order.order_items)) {
+                  setOrderItems(detailData.order.order_items);
+                  console.log("Successfully fetched order items from detail API:", detailData.order.order_items);
+                } else {
+                  console.log("Still no order items found, setting empty array");
+                  setOrderItems([]);
+                }
+              } catch (detailError) {
+                console.error("Error fetching order details:", detailError);
+                setOrderItems([]);
               }
-            } catch (error) {
-              console.error("Error processing takeaway order:", error);
-              Alert.alert("Error", "Server error while creating takeaway order");
             }
-          } else if (orderStatus === "delivery_pending") {
+          } catch (error) {
+            console.error("Error fetching taway_hold order:", error);
+            Alert.alert("Error", "Failed to fetch takeaway order");
+          }
+        } else if (orderStatus === "taway_new") {
+          try {
+            console.log("Processing taway_new order");
+
+            // Get the cartItems - handle both string and array formats
+            let cartItemsRaw = params.cartItems;
+            console.log("Raw cartItems from params:", cartItemsRaw);
+
+            // Parse cart items
+            const parsedCart = safeParseCartItems(cartItemsRaw);
+            console.log("Parsed cart items:", parsedCart);
+
+            if (!Array.isArray(parsedCart) || parsedCart.length === 0) {
+              Alert.alert("Error", "No cart items found. Please go back and try again.");
+              return;
+            }
+
+            setOrderItems(parsedCart);
+
+            // Calculate total from cart items
+            const calculatedTotal = parsedCart.reduce((sum, item) => {
+              const price = parseFloat(item.price || item.rate || item.total || 0);
+              const quantity = parseInt(item.quantity || item.qty || 1);
+              return sum + (price * quantity);
+            }, 0);
+
+            const total = calculatedTotal > 0 ? calculatedTotal : parseFloat(params.total || "0");
+
+            console.log("Calculated total:", calculatedTotal, "Param total:", params.total, "Using:", total);
+
+            setTotalSale(total);
+            setDiscountAmount(0);
+            setServiceCharge(0);
+            setGrandTotal(total);
+            setOtherCharges(0);
+
+            // Prepare order data for API
+            const orderData = parsedCart.map(item => ({
+              id: String(item.id || item.foodItemId || Math.random().toString(36).substr(2, 9)),
+              price: Number(item.price || item.rate || item.total || 0),
+              quantity: Number(item.quantity || item.qty || 1),
+            }));
+
+            console.log("Order data for API:", orderData);
+
+            if (orderData.length === 0) {
+              Alert.alert("Error", "Could not prepare order items for API");
+              return;
+            }
+
+            // Call API to create order
+            const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                function: "update_orders",
+                data: {
+                  login_token,
+                  table_id: "-1",
+                  order_status: "act",
+                  steward_id: "-1",
+                  smode: "taway",
+                  order_data: orderData,
+                },
+              }),
+            });
+
+            const data = await response.json();
+            console.log("API Response for taway_new:", data);
+
+            if (data.status === "success" && data.response?.ts_id) {
+              setOrderId(data.response.ts_id);
+            } else {
+              Alert.alert("Error", "Failed to create takeaway order: " + (data.message || "Unknown error"));
+            }
+          } catch (error) {
+            console.error("Error processing taway_new order:", error);
+            Alert.alert("Error", "Server error while creating takeaway order: " + error.message);
+          }
+        } else if (orderStatus === "delivery_pending") {
+          try {
             const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -182,25 +318,45 @@ export default function PaymentScreen() {
             });
 
             const data = await response.json();
+            console.log("delivery_pending API response:", data);
 
             setOrderId(data.order.ts_id);
+
+            // Set order items - the API response has 'items' not 'order_items'
+            if (data.order.items && Array.isArray(data.order.items)) {
+              setOrderItems(data.order.items);
+              console.log("delivery_pending order items:", data.order.items);
+            } else {
+              console.log("No items found in delivery_pending response");
+              setOrderItems([]);
+            }
+
             const orderTotal = parseFloat(data?.order?.order_total || 0);
             const orderDiscount = parseFloat(data?.order?.discount || 0);
             const orderServiceCharge = parseFloat(data?.order?.service_charge || 0);
+            const orderDeliveryFee = parseFloat(data?.order?.delivery_fee || 0);
             const orderGrandTotal = parseFloat(data?.order?.grand_total || 0);
 
             setTotalSale(orderTotal);
             setDiscountAmount(orderDiscount);
             setServiceCharge(orderServiceCharge);
-            setGrandTotal(orderGrandTotal);
-            setOtherCharges(orderServiceCharge);
+            setDeliveryFee(orderDeliveryFee); // Set delivery fee
+
+            // Calculate grand total including delivery fee
+            const calculatedGrandTotal = orderTotal + orderServiceCharge + orderDeliveryFee - orderDiscount;
+            setGrandTotal(calculatedGrandTotal);
+            setOtherCharges(orderServiceCharge + orderDeliveryFee); // Include delivery fee in other charges
 
             if (orderTotal > 0) {
               const discountPercentage = (orderDiscount / orderTotal) * 100;
               setSelectedDiscount(`${Math.round(discountPercentage)}%`);
             }
-          } else if (orderStatus === "dinein_active" || orderStatus === "dinein_inv") {
-            console.log("Order Status : ", orderStatus);
+          } catch (error) {
+            console.error("Error fetching delivery_pending order:", error);
+            Alert.alert("Error", "Failed to fetch delivery order");
+          }
+        } else if (orderStatus === "dinein_active" || orderStatus === "dinein_inv") {
+          try {
             const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -233,32 +389,31 @@ export default function PaymentScreen() {
               const discountPercentage = (orderDiscount / orderTotal) * 100;
               setSelectedDiscount(`${Math.round(discountPercentage)}%`);
             }
-          } else if (orderStatus === "delivery_new") {
-            try {
-              const total = parseFloat(params.total || "0");
-              const discount = 0;
-              const service = 0;
-              const grand = total + service - discount;
+          } catch (error) {
+            console.error("Error fetching dinein order:", error);
+            Alert.alert("Error", "Failed to fetch dine-in order");
+          }
+        } else if (orderStatus === "delivery_new") {
+          try {
+            const total = parseFloat(params.total || "0");
+            const discount = 0;
+            const service = 0;
+            const grand = total + service - discount;
 
-              setTotalSale(total);
-              setDiscountAmount(discount);
-              setServiceCharge(service);
-              setGrandTotal(grand);
-              setOtherCharges(service);
-            } catch (error) {
-              console.error("Error processing delivery order:", error);
-              Alert.alert("Error", "Server error while creating delivery order");
-            }
+            setTotalSale(total);
+            setDiscountAmount(discount);
+            setServiceCharge(service);
+            setGrandTotal(grand);
+            setOtherCharges(service);
+          } catch (error) {
+            console.error("Error processing delivery_new order:", error);
+            Alert.alert("Error", "Server error while creating delivery order");
           }
         }
       };
 
       fetchData();
-
-      return () => {
-        hasInitialized.current = false;
-      };
-    }, [orderStatus])
+    }, [orderStatus, params.cartItems, params.total, params.orderId, params.ts_id, params.tableId]) // Added more dependencies
   );
 
   const getDiscountAmount = () => {
@@ -288,21 +443,20 @@ export default function PaymentScreen() {
       });
 
       const data = await response.json();
-      console.log("Invoice API response:", data);
 
       if (data.status === "success") {
         Alert.alert("Success", "Invoice generated successfully");
         router.push({
           pathname: '/print',
           params: {
-            orderId: orderId,
-            orderItems: orderItems,
+            orderId,
+            orderItems: JSON.stringify(orderItems),
             printStatus: 'invoice',
             orderDiscount: discountAmount.toFixed(2),
             paidAmount: paidAmount.toFixed(2),
             orderBalance: balance.toFixed(2),
             tableId: params.tableId,
-          }
+          },
         });
       } else {
         Alert.alert("Error", "Failed to generate invoice");
@@ -316,12 +470,12 @@ export default function PaymentScreen() {
   };
 
   useEffect(() => {
-    if (orderStatus === "dinein_active" || orderStatus === "taway_hold" || orderStatus === "taway_new" || orderStatus === "delivery_new") {
+    if (orderStatus === "dinein_active" || orderStatus === "taway_hold" || orderStatus === "taway_new" || orderStatus === "delivery_new" || orderStatus === "delivery_pending") {
       const discount = getDiscountAmount();
-      const newGrandTotal = totalSale + serviceCharge - discount;
+      const newGrandTotal = totalSale + serviceCharge + deliveryFee - discount;
       setGrandTotal(newGrandTotal);
     }
-  }, [selectedDiscount, totalSale, serviceCharge]);
+  }, [selectedDiscount, totalSale, serviceCharge, deliveryFee]);
 
   const handleDiscountSelection = (discount) => {
     setSelectedDiscount(discount);
@@ -357,11 +511,8 @@ export default function PaymentScreen() {
 
         if (orderStatus === "taway_hold") {
           paymentData.discount = discount.toFixed(2);
-          console.log("Discount : ", paymentData.discount);
         }
       }
-
-      console.log("Payment Data : ", paymentData);
 
       const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
         method: 'POST',
@@ -389,18 +540,26 @@ export default function PaymentScreen() {
       }
 
       if (data.status === "success") {
-        const orderId = data.response;
+        const responseOrderId = data.response;
+
         router.push({
           pathname: '/print',
           params: {
-            orderId: orderId,
+            orderId: responseOrderId,
             orderItems: JSON.stringify(orderItems),
             printStatus: 'paid',
-            orderDiscount: discountAmount.toFixed(2),
+            orderDiscount: discount.toFixed(2),
             paidAmount: paidAmount.toFixed(2),
             orderBalance: balance.toFixed(2),
+            tableId: params.tableId || '-1',
+            totalSale: totalSale.toFixed(2),
+            serviceCharge: serviceCharge.toFixed(2),
+            deliveryFee: deliveryFee.toFixed(2), // Add delivery fee
+            grandTotal: grandTotal.toFixed(2),
           },
         });
+
+        // Reset form after successful payment
         setCard('0');
         setCash('0');
         setPaidAmount(0);
@@ -430,10 +589,11 @@ export default function PaymentScreen() {
       const login_token = await AsyncStorage.getItem('login_token');
       const discount = getDiscountAmount();
 
-      const orderData = JSON.parse(params.cartItems || "[]").map(item => ({
+      const cartItems = safeParseCartItems(params.cartItems);
+      const orderData = cartItems.map(item => ({
         id: item.id,
-        price: parseFloat(item.price),
-        quantity: parseInt(item.quantity),
+        price: parseFloat(item.price || item.rate || 0),
+        quantity: parseInt(item.quantity || item.qty || 1),
       }));
 
       const payload = {
@@ -743,8 +903,9 @@ export default function PaymentScreen() {
                           borderRadius: 8,
                           alignItems: 'center',
                           paddingVertical: 14,
+                          opacity: orderStatus === "delivery_new" ? 0.7 : 1,
                         }}
-                        disabled={isLoading}
+                        disabled={isLoading || orderStatus === "delivery_new"}
                         onPress={handlePayment}
                       >
                         <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Pay</Text>

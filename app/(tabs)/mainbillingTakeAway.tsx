@@ -245,8 +245,6 @@ export default function MainBilling() {
 
 
   const total = cartItems.reduce((sum, item) => sum + item.total, 0);
-  console.log('Full Card:', cartItems);
-  console.log('Table ID:', params.tableId);
 
   const navigateToBillScreen = () => {
     router.push({

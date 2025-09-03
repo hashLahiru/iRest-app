@@ -259,7 +259,7 @@ export default function BillScreenDineIn() {
                   tableId: params.tableId,
                   total: total.toFixed(2),
                   stewardId: params.stewardId,
-                  cartItems: params.cartItems,   // ✅ remove extra stringify
+                  cartItems: JSON.stringify(items),
                   orderStatus: "taway_new"
                 },
               });
@@ -274,17 +274,6 @@ export default function BillScreenDineIn() {
     </SafeAreaView>
   );
 }
-
-const NavButton = ({ label, icon, route, active = false, onPress }) => (
-  <TouchableOpacity
-    style={styles.navItemContainer}
-    onPress={onPress || (() => router.push(route))}
-  >
-    <Ionicons name={icon} size={24} color={active ? '#f57c00' : '#ccc'} />
-    <Text style={[styles.navText, active && { color: '#f57c00' }]}>{label}</Text>
-  </TouchableOpacity>
-);
-
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f6f4f2' },
