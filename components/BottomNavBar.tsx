@@ -13,14 +13,14 @@ export default function BottomNavBar({ activeTab }) {
 
 const styles = StyleSheet.create({
   bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
-    backgroundColor: '#fff',
-    position: 'absolute',
+    borderTopColor: "#ddd",
+    backgroundColor: "#fff",
+    position: "absolute",
     bottom: 0,
-    width: '100%',
+    width: "100%",
   },
 });

@@ -1,14 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useEffect } from "react";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -16,37 +10,43 @@ export default function SplashScreen() {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
-        const token = await AsyncStorage.getItem('login_token');
-        const last_workday = await AsyncStorage.getItem('last_workday');
+        const token = await AsyncStorage.getItem("login_token");
+        const last_workday = await AsyncStorage.getItem("last_workday");
 
         if (!token) {
-          return router.push('/login');
+          return router.push("/login");
         }
 
-        const response = await fetch('https://raiza.digieclipse.com/App_apiv2/app_api', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            function: 'check_login_status',
-            data: { login_token: token },
-          }),
-        });
+        const response = await fetch(
+          "https://raiza.digieclipse.com/App_apiv2/app_api",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              function: "check_login_status",
+              data: { login_token: token },
+            }),
+          }
+        );
 
         const result = await response.json();
 
-        if (result.status === 'success') {
-          if (last_workday && new Date(last_workday).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) {
-            return router.replace('/table');
+        if (result.status === "success") {
+          if (
+            last_workday &&
+            new Date(last_workday).toISOString().slice(0, 10) ===
+              new Date().toISOString().slice(0, 10)
+          ) {
+            return router.replace("/table");
           }
-          router.replace('/home');
+          router.replace("/home");
         } else {
-          router.push('/login');
+          router.push("/login");
         }
       } catch (err) {
-        console.error('Login status check failed:', err);
-        router.replace('/login');
+        router.replace("/login");
       }
     };
 
@@ -55,18 +55,22 @@ export default function SplashScreen() {
 
   return (
     <LinearGradient
-      colors={['#1c1c1c', '#f57c00']}
+      colors={["#1c1c1c", "#f57c00"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <View style={styles.centerContent}>
         <Image
-          source={require('../../assets/images/logo.png')}
+          source={require("../../assets/images/logo.png")}
           style={styles.logo}
           resizeMode="contain"
         />
-        <ActivityIndicator size="large" color="#fff" style={{ marginTop: 24 }} />
+        <ActivityIndicator
+          size="large"
+          color="#fff"
+          style={{ marginTop: 24 }}
+        />
       </View>
 
       <View style={styles.footer}>
@@ -83,8 +87,8 @@ const styles = StyleSheet.create({
   },
   centerContent: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   logo: {
     width: 200,
@@ -92,17 +96,17 @@ const styles = StyleSheet.create({
     marginBottom: 50,
   },
   footer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingBottom: 30,
   },
   powered: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   credit: {
     fontSize: 10,
-    color: '#ddd',
+    color: "#ddd",
     marginTop: 6,
   },
 });

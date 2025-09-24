@@ -239,7 +239,7 @@ export default function BillScreenDineIn() {
         <Text style={styles.headerTitle}>Main Billing</Text>
         <View style={styles.tableNumberText}>
           <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-            {params.tableId !== '-1' ? `T-${params.tableId}` : 'TA'}
+            {params.tableId !== '-1' ? `T-${String(params.tableId)}` : 'TA'}
           </Text>
         </View>
         <Ionicons name="menu" size={24} color="#000" />
