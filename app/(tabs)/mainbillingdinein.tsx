@@ -349,12 +349,6 @@ export default function MainBillingDineIn() {
           <Text style={styles.logoText}>
             <Text style={{ color: "#f60" }}>i</Text>POS
           </Text>
-          <Ionicons
-            name="menu"
-            size={24}
-            color="#555"
-            style={{ marginLeft: 10 }}
-          />
         </View>
       </View>
 
@@ -427,7 +421,7 @@ export default function MainBillingDineIn() {
               onPress={() => {
                 setSelectedCategory(selectedCategory === item ? null : item);
                 setSelectedItem(null);
-                setSearchQuery(""); // Clear search when changing category
+                setSearchQuery("");
               }}
             >
               <Image
@@ -562,7 +556,7 @@ const styles = StyleSheet.create({
     paddingTop: 30,
     paddingBottom: 12,
   },
-  headerTitle: { fontSize: 20, fontWeight: "600", color: "#222", right: 60 },
+  headerTitle: { fontSize: 20, fontWeight: "600", color: "#222", right: 70 },
   tableNumberText: {
     backgroundColor: "#000",
     borderRadius: 6,
@@ -579,8 +573,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#fff",
     marginHorizontal: 16,
-    marginVertical: 10,
-    padding: 10,
+    marginTop: 6,
+    marginBottom: 10,
+    padding: 5,
     borderRadius: 10,
   },
   searchIcon: { marginRight: 10 },
@@ -598,7 +593,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: "#f57c00" },
   tabText: { fontSize: 14, color: "#333" },
   tabTextActive: { color: "#fff", fontWeight: "600" },
-  categoriesContainer: { height: 110, marginBottom: 10 },
+  categoriesContainer: { height: 110, marginBottom: 0 },
   categoriesList: { paddingHorizontal: 15 },
   categoryCard: {
     backgroundColor: "#fff",

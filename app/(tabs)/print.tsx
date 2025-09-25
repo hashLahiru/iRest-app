@@ -189,7 +189,11 @@ export default function PrintScreen() {
       const GS = "\x1D";
 
       const MAX_LINE_LENGTH = 32;
-      const MAX_ITEM_NAME_LENGTH = MAX_LINE_LENGTH;
+      const MAX_ITEM_NAME_LENGTH = 24; // Reduced to allow space for quantity
+
+      // Check if we should hide prices (invoices) or show prices (bills)
+      const isInvoice = printStatus === "invoice";
+      const isBill = printStatus === "paid";
 
       const itemsText =
         parsedOrderItems && parsedOrderItems.length > 0
@@ -197,29 +201,39 @@ export default function PrintScreen() {
               .map((i) => {
                 const name = i.name || "Unknown Item";
                 const qty = i.qty ?? i.quantity ?? i.o_qty ?? 1;
-                const price = parseFloat(
-                  i.rate ?? i.price ?? i.s_price ?? 0
-                ).toFixed(2);
-                const total = (
-                  Number(qty) * Number(i.rate ?? i.price ?? i.s_price ?? 0)
-                ).toFixed(2);
 
                 const variation = i.variation ? ` (${i.variation})` : "";
                 let itemName = name + variation;
 
+                // Truncate item name if too long to fit with quantity
                 if (itemName.length > MAX_ITEM_NAME_LENGTH) {
                   itemName =
                     itemName.substring(0, MAX_ITEM_NAME_LENGTH - 3) + "...";
                 }
 
-                const itemLine = itemName + "\n";
+                // For invoices: item name on left, quantity on right (x2 format)
+                if (isInvoice) {
+                  const quantityText = `x${qty}`;
+                  // Pad the item name and add quantity at the end
+                  const paddedItemName = itemName.padEnd(
+                    MAX_LINE_LENGTH - quantityText.length
+                  );
+                  return paddedItemName + quantityText;
+                } else {
+                  // For bills: show prices as before
+                  const price = parseFloat(
+                    i.rate ?? i.price ?? i.s_price ?? 0
+                  ).toFixed(2);
+                  const total = (
+                    Number(qty) * Number(i.rate ?? i.price ?? i.s_price ?? 0)
+                  ).toFixed(2);
 
-                // Second line: quantity, price, and total (right aligned)
-                const detailLine = `  ${qty} x ${price} = ${total}`.padStart(
-                  MAX_LINE_LENGTH
-                );
-
-                return itemLine + detailLine;
+                  const itemLine = itemName + "\n";
+                  const detailLine = `  ${qty} x ${price} = ${total}`.padStart(
+                    MAX_LINE_LENGTH
+                  );
+                  return itemLine + detailLine;
+                }
               })
               .join("\n")
           : "No items available";
@@ -258,6 +272,8 @@ export default function PrintScreen() {
         balance,
         items: parsedOrderItems,
         itemCount: parsedOrderItems?.length || 0,
+        isInvoice,
+        isBill,
       });
 
       const formatAmountLine = (
@@ -279,21 +295,7 @@ export default function PrintScreen() {
       let commands = "";
 
       if (printStatus === "invoice") {
-        let chargesSection = formatAmountLine("Subtotal", subtotal);
-        if (discount > 0) {
-          chargesSection += formatAmountLine("Discount", discount);
-        }
-        if (serviceCharge > 0) {
-          chargesSection += formatAmountLine("Service Charge", serviceCharge);
-        }
-        if (deliveryFee > 0) {
-          chargesSection += formatAmountLine("Delivery Fee", deliveryFee);
-        }
-
-        chargesSection += "-".repeat(MAX_LINE_LENGTH) + "\n";
-
-        chargesSection += formatAmountLine("GRAND TOTAL", grandTotal, true);
-
+        // For invoices: single line format with quantity on right
         commands = [
           ESC + "@",
           ESC + "a" + "\x01",
@@ -306,11 +308,10 @@ export default function PrintScreen() {
           "-".repeat(MAX_LINE_LENGTH) + "\n",
           itemsText + "\n",
           "-".repeat(MAX_LINE_LENGTH) + "\n",
-          chargesSection,
-          "-".repeat(MAX_LINE_LENGTH) + "\n",
           GS + "V" + "\x41" + "\x10",
         ].join("");
       } else {
+        // Bill printing - show all prices and charges (multi-line format)
         let chargesSection = formatAmountLine("Subtotal", subtotal);
         if (discount > 0) {
           chargesSection += formatAmountLine("Discount", discount);

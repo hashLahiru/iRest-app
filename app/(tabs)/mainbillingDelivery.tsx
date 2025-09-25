@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { router, useGlobalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { router, useGlobalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,10 +14,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const screenWidth = Dimensions.get('window').width;
+const screenWidth = Dimensions.get("window").width;
 const numColumns = 2;
 const boxWidth = screenWidth / numColumns - 24;
 
@@ -64,41 +64,47 @@ interface CartItem {
 }
 
 export default function MainBillingDelivery() {
-  const [selectedSuperCategory, setSelectedSuperCategory] = useState('all');
+  const [selectedSuperCategory, setSelectedSuperCategory] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<FoodItem | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
+  const [selectedVariation, setSelectedVariation] = useState<Variation | null>(
+    null
+  );
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
   const [loading, setLoading] = useState(true);
   const [foodData, setFoodData] = useState<FoodListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const params = useGlobalSearchParams();
 
   useEffect(() => {
     const fetchFoodData = async () => {
-      const login_token = await AsyncStorage.getItem('login_token');
+      const login_token = await AsyncStorage.getItem("login_token");
       try {
-        const response = await axios.post('https://raiza.digieclipse.com/App_apiv2/app_api', {
-          function: "get_food_list",
-          data: {
-            login_token: login_token,
+        const response = await axios.post(
+          "https://raiza.digieclipse.com/App_apiv2/app_api",
+          {
+            function: "get_food_list",
+            data: {
+              login_token: login_token,
+            },
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
           }
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
+        );
 
-        if (response.data.status === 'success') {
+        if (response.data.status === "success") {
           setFoodData(response.data);
         } else {
-          setError('Failed to fetch food data');
+          setError("Failed to fetch food data");
         }
       } catch (err) {
-        setError('Error connecting to server');
-        console.error('API Error:', err);
+        setError("Error connecting to server");
+        console.error("API Error:", err);
       } finally {
         setLoading(false);
       }
@@ -107,47 +113,57 @@ export default function MainBillingDelivery() {
     fetchFoodData();
   }, []);
 
-  const superCategories = foodData?.food_list.superCategories.map(sc => ({
-    id: sc.id,
-    name: sc.name
-  })) || [];
+  const superCategories =
+    foodData?.food_list.superCategories.map((sc) => ({
+      id: sc.id,
+      name: sc.name,
+    })) || [];
 
-  const categories = foodData?.food_list.categories ?
-    Object.keys(foodData.food_list.categories).reduce((acc, superId) => {
-      const superCatName = foodData.food_list.superCategories.find(sc => sc.id === superId)?.name || superId;
-      acc[superId] = foodData.food_list.categories[superId].map(cat => cat.name);
-      return acc;
-    }, {} as Record<string, string[]>) : {};
+  const categories = foodData?.food_list.categories
+    ? Object.keys(foodData.food_list.categories).reduce((acc, superId) => {
+        const superCatName =
+          foodData.food_list.superCategories.find((sc) => sc.id === superId)
+            ?.name || superId;
+        acc[superId] = foodData.food_list.categories[superId].map(
+          (cat) => cat.name
+        );
+        return acc;
+      }, {} as Record<string, string[]>)
+    : {};
 
   if (foodData?.food_list.categories && superCategories.length > 0) {
-    categories['all'] = [];
-    Object.values(foodData.food_list.categories).forEach(catList => {
-      catList.forEach(cat => {
-        if (!categories['all'].includes(cat.name)) {
-          categories['all'].push(cat.name);
+    categories["all"] = [];
+    Object.values(foodData.food_list.categories).forEach((catList) => {
+      catList.forEach((cat) => {
+        if (!categories["all"].includes(cat.name)) {
+          categories["all"].push(cat.name);
         }
       });
     });
   }
 
-  const allItems = foodData?.food_list.allItems.map(item => ({
-    id: item.id,
-    name: item.name,
-    category: foodData.food_list.categories[item.super_category_id]?.find(c => c.id === item.category_id)?.name || item.category_id,
-    superCategory: item.super_category_id,
-    image: { uri: item.image },
-    variations: item.variations.map(v => ({
-      size: v.size,
-      price: v.price,
-      ris_id: v.ris_id
-    }))
-  })) || [];
+  const allItems =
+    foodData?.food_list.allItems.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category:
+        foodData.food_list.categories[item.super_category_id]?.find(
+          (c) => c.id === item.category_id
+        )?.name || item.category_id,
+      superCategory: item.super_category_id,
+      image: { uri: item.image },
+      variations: item.variations.map((v) => ({
+        size: v.size,
+        price: v.price,
+        ris_id: v.ris_id,
+      })),
+    })) || [];
 
   const getFilteredItems = () => {
     let items = allItems;
 
     if (searchQuery) {
-      items = items.filter(item =>
+      items = items.filter((item) =>
         item.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -157,11 +173,13 @@ export default function MainBillingDelivery() {
     }
 
     if (selectedCategory) {
-      return items.filter(item => item.category === selectedCategory);
+      return items.filter((item) => item.category === selectedCategory);
     }
 
-    if (selectedSuperCategory !== 'all') {
-      return items.filter(item => item.superCategory === selectedSuperCategory);
+    if (selectedSuperCategory !== "all") {
+      return items.filter(
+        (item) => item.superCategory === selectedSuperCategory
+      );
     }
 
     return items;
@@ -176,14 +194,14 @@ export default function MainBillingDelivery() {
   const currentCategories = getCurrentCategories();
 
   const increment = (variationKey: string) => {
-    setQuantities(prev => ({
+    setQuantities((prev) => ({
       ...prev,
-      [variationKey]: (prev[variationKey] || 0) + 1
+      [variationKey]: (prev[variationKey] || 0) + 1,
     }));
   };
 
   const decrement = (variationKey: string) => {
-    setQuantities(prev => {
+    setQuantities((prev) => {
       const count = prev[variationKey] || 0;
       if (count > 1) return { ...prev, [variationKey]: count - 1 };
       const updated = { ...prev };
@@ -195,20 +213,25 @@ export default function MainBillingDelivery() {
   const addToCart = () => {
     if (!selectedItem) return;
 
-    const risSet = new Set((selectedItem.variations || []).map(v => v.ris_id));
+    const risSet = new Set(
+      (selectedItem.variations || []).map((v) => v.ris_id)
+    );
     const entries = Object.entries(quantities).filter(
       ([rid, qty]) => risSet.has(rid) && (qty as number) > 0
     );
 
     if (entries.length === 0) {
-      Alert?.alert?.('No size selected', 'Increase quantity for at least one size.');
+      Alert?.alert?.(
+        "No size selected",
+        "Increase quantity for at least one size."
+      );
       return;
     }
 
     const nextCart = [...cartItems];
 
     entries.forEach(([rid, qty]) => {
-      const variation = selectedItem.variations.find(v => v.ris_id === rid);
+      const variation = selectedItem.variations.find((v) => v.ris_id === rid);
       if (!variation) return;
 
       const quantityNum = Number(qty) || 1;
@@ -223,7 +246,7 @@ export default function MainBillingDelivery() {
         image: selectedItem.image,
       };
 
-      const idx = nextCart.findIndex(ci => ci.id === variation.ris_id);
+      const idx = nextCart.findIndex((ci) => ci.id === variation.ris_id);
       if (idx >= 0) {
         nextCart[idx] = row;
       } else {
@@ -233,9 +256,11 @@ export default function MainBillingDelivery() {
 
     setCartItems(nextCart);
 
-    setQuantities(prev => {
+    setQuantities((prev) => {
       const copy = { ...prev };
-      risSet.forEach(rid => { delete copy[rid]; });
+      risSet.forEach((rid) => {
+        delete copy[rid];
+      });
       return copy;
     });
 
@@ -243,19 +268,18 @@ export default function MainBillingDelivery() {
     setSelectedVariation(null);
   };
 
-
   const total = cartItems.reduce((sum, item) => sum + item.total, 0);
-  console.log('Full Cart Delivery:', cartItems);
+  console.log("Full Cart Delivery:", cartItems);
 
   const navigateToBillScreen = () => {
     router.push({
-      pathname: '/billScreenDelivery',
+      pathname: "/billScreenDelivery",
       params: {
         cartItems: JSON.stringify(cartItems),
         total: total.toFixed(2),
         tableId: -2,
         orderStatus: "delivery_new",
-      }
+      },
     });
 
     setSelectedItem(null);
@@ -294,26 +318,40 @@ export default function MainBillingDelivery() {
             setSelectedVariation(null);
             setCartItems([]);
             setQuantities({});
-            router.push('/table');
+            router.push("/table");
           }}
         >
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={styles.headerTitle}>Main Billing</Text>
           <View style={styles.tableNumberText}>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>DEL</Text>
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
+              DEL
+            </Text>
           </View>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.logoText}><Text style={{ color: '#f60' }}>i</Text>POS</Text>
-          <Ionicons name="menu" size={24} color="#555" style={{ marginLeft: 10 }} />
+          <Text style={styles.logoText}>
+            <Text style={{ color: "#f60" }}>i</Text>POS
+          </Text>
+          <Ionicons
+            name="menu"
+            size={24}
+            color="#555"
+            style={{ marginLeft: 10 }}
+          />
         </View>
       </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#aaa" style={styles.searchIcon} />
+        <Ionicons
+          name="search"
+          size={20}
+          color="#aaa"
+          style={styles.searchIcon}
+        />
         <TextInput
           style={styles.searchInput}
           placeholder="Search items..."
@@ -329,20 +367,30 @@ export default function MainBillingDelivery() {
           horizontal
           data={superCategories}
           showsHorizontalScrollIndicator={false}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.tabs}
           renderItem={({ item: tab }) => (
             <TouchableOpacity
               key={tab.id}
-              style={[styles.tabButton, selectedSuperCategory === tab.id && styles.tabActive]}
+              style={[
+                styles.tabButton,
+                selectedSuperCategory === tab.id && styles.tabActive,
+              ]}
               onPress={() => {
                 setSelectedSuperCategory(tab.id);
                 setSelectedCategory(null);
                 setSelectedItem(null);
-                setSearchQuery('');
+                setSearchQuery("");
               }}
             >
-              <Text style={[styles.tabText, selectedSuperCategory === tab.id && styles.tabTextActive]}>{tab.name}</Text>
+              <Text
+                style={[
+                  styles.tabText,
+                  selectedSuperCategory === tab.id && styles.tabTextActive,
+                ]}
+              >
+                {tab.name}
+              </Text>
             </TouchableOpacity>
           )}
         />
@@ -354,18 +402,24 @@ export default function MainBillingDelivery() {
           data={currentCategories}
           horizontal
           showsHorizontalScrollIndicator={false}
-          keyExtractor={item => item}
+          keyExtractor={(item) => item}
           contentContainerStyle={styles.categoriesList}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={[styles.categoryCard, selectedCategory === item && styles.categoryCardActive]}
+              style={[
+                styles.categoryCard,
+                selectedCategory === item && styles.categoryCardActive,
+              ]}
               onPress={() => {
                 setSelectedCategory(selectedCategory === item ? null : item);
                 setSelectedItem(null);
-                setSearchQuery('');
+                setSearchQuery("");
               }}
             >
-              <Image source={require('../../assets/images/noodles.png')} style={styles.categoryImage} />
+              <Image
+                source={require("../../assets/images/noodles.png")}
+                style={styles.categoryImage}
+              />
               <Text style={styles.categoryName}>{item}</Text>
             </TouchableOpacity>
           )}
@@ -387,7 +441,12 @@ export default function MainBillingDelivery() {
               >
                 <Text style={styles.itemCode}>{item.id}</Text>
                 <View style={styles.cardRow}>
-                  <Image source={item.image || require('../../assets/images/noodles.png')} style={styles.image} />
+                  <Image
+                    source={
+                      item.image || require("../../assets/images/noodles.png")
+                    }
+                    style={styles.image}
+                  />
                   <View style={styles.infoSection}>
                     <Text style={styles.itemName}>{item.name}</Text>
                   </View>
@@ -400,7 +459,13 @@ export default function MainBillingDelivery() {
             <View style={[styles.card, styles.itemDetailCard]}>
               <Text style={styles.itemCode}>{selectedItem.id}</Text>
               <View style={styles.cardRow}>
-                <Image source={selectedItem.image || require('../../assets/images/noodles.png')} style={styles.image} />
+                <Image
+                  source={
+                    selectedItem.image ||
+                    require("../../assets/images/noodles.png")
+                  }
+                  style={styles.image}
+                />
                 <View style={styles.infoSection}>
                   <Text style={styles.itemName}>{selectedItem.name}</Text>
                 </View>
@@ -409,12 +474,25 @@ export default function MainBillingDelivery() {
                 const key = variation.ris_id;
                 return (
                   <View key={key} style={styles.variationOption}>
-                    <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 8 }}>
+                    <View
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingHorizontal: 8,
+                      }}
+                    >
                       <Text style={styles.variationText}>{variation.size}</Text>
-                      <Text style={styles.variationText}>{variation.price} LKR</Text>
+                      <Text style={styles.variationText}>
+                        {variation.price} LKR
+                      </Text>
                     </View>
                     <View style={styles.qtyRow}>
-                      <TouchableOpacity style={styles.qtyButton} onPress={() => decrement(key)}>
+                      <TouchableOpacity
+                        style={styles.qtyButton}
+                        onPress={() => decrement(key)}
+                      >
                         <Text style={styles.qtyIcon}>−</Text>
                       </TouchableOpacity>
                       <Text style={styles.qtyText}>{quantities[key] || 0}</Text>
@@ -455,55 +533,169 @@ export default function MainBillingDelivery() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f6f4f2' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 30, paddingBottom: 12, },
-  headerTitle: { fontSize: 20, fontWeight: '600', color: '#222', right: 60 },
-  tableNumberText: { backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 0, alignSelf: 'center', right: 50 },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  logoText: { fontSize: 20, fontWeight: '700', color: '#222' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 10, padding: 8, borderRadius: 10, },
+  container: { flex: 1, backgroundColor: "#f6f4f2" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 30,
+    paddingBottom: 12,
+  },
+  headerTitle: { fontSize: 20, fontWeight: "600", color: "#222", right: 60 },
+  tableNumberText: {
+    backgroundColor: "#000",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginLeft: 0,
+    alignSelf: "center",
+    right: 50,
+  },
+  headerRight: { flexDirection: "row", alignItems: "center" },
+  logoText: { fontSize: 20, fontWeight: "700", color: "#222" },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 10,
+    padding: 5,
+    borderRadius: 10,
+  },
   searchIcon: { marginRight: 10 },
-  searchText: { color: '#888', fontSize: 16 },
-  tabsContainer: { marginBottom: 10, },
-  tabs: { paddingHorizontal: 10, },
-  tabButton: { paddingVertical: 8, paddingHorizontal: 15, height: 35, marginRight: 8, borderRadius: 20, backgroundColor: '#e2dfdd', },
-  tabActive: { backgroundColor: '#f57c00' },
-  tabText: { fontSize: 14, color: '#333' },
-  tabTextActive: { color: '#fff', fontWeight: '600' },
-  categoriesContainer: { height: 110, marginBottom: 10, },
-  categoriesList: { paddingHorizontal: 15, },
-  categoryCard: { backgroundColor: '#fff', borderRadius: 10, marginRight: 10, alignItems: 'center', padding: 10, width: 100, height: 90, },
-  categoryCardActive: { backgroundColor: '#f6e9e1', borderColor: '#f57c00', borderWidth: 1, },
-  categoryImage: { width: 50, height: 50, resizeMode: 'contain', marginBottom: 6, },
-  categoryName: { fontSize: 13, fontWeight: '600', textAlign: 'center', },
-  productsContainer: { flex: 1, marginBottom: 80, },
-  productsList: { paddingHorizontal: 12, },
-  itemDetailContainer: { padding: 16, },
-  card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 7, marginHorizontal: 5, padding: 10, },
-  itemDetailCard: { width: '100%', marginBottom: 16, },
-  variationCard: { width: '100%', marginBottom: 16, },
-  itemCode: { position: 'absolute', top: 8, right: 8, backgroundColor: '#f57c00', color: '#fff', paddingHorizontal: 6, paddingVertical: 2, fontSize: 12, borderRadius: 4, zIndex: 1, },
-  cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, },
-  image: { width: 70, height: 70, resizeMode: 'contain', marginRight: 10, marginTop: 20, },
-  infoSection: { flex: 1, paddingTop: 20, },
-  itemName: { fontSize: 16, fontWeight: '500', color: '#333', },
-  itemPrice: { fontWeight: '700', color: '#000', marginTop: 4, },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f6f4f2', borderRadius: 20, marginTop: 10, },
-  qtyButton: { backgroundColor: '#ccc', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 30, },
-  qtyButtonOrange: { backgroundColor: '#f57c00', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 30, },
-  qtyIcon: { color: '#333', fontSize: 16, fontWeight: '700', },
-  qtyIconWhite: { color: '#fff', fontSize: 16, fontWeight: '700', },
-  qtyText: { fontSize: 16, marginHorizontal: 8, fontWeight: '600', },
-  variationTitle: { fontSize: 16, fontWeight: '600', marginBottom: 10, },
-  variationOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, },
-  variationText: { fontSize: 15, },
-  addButton: { backgroundColor: '#f57c00', borderRadius: 10, padding: 15, alignItems: 'center', },
-  addButtonText: { color: '#fff', fontWeight: '600', fontSize: 16, },
-  totalBar: { position: 'absolute', bottom: 40, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 10, padding: 16, paddingVertical: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', },
-  totalLabel: { color: '#fff', fontSize: 18, fontWeight: '600', },
-  totalAmount: { color: '#fff', fontSize: 18, fontWeight: '700', },
-  loadingContainer: { justifyContent: 'center', alignItems: 'center', },
-  errorContainer: { justifyContent: 'center', alignItems: 'center', padding: 20, },
-  errorText: { color: 'red', marginBottom: 20, textAlign: 'center', },
-  searchInput: { flex: 1, fontSize: 14, color: '#333', height: 20 },
+  searchText: { color: "#888", fontSize: 16 },
+  tabsContainer: { marginBottom: 10 },
+  tabs: { paddingHorizontal: 10 },
+  tabButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    height: 35,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: "#e2dfdd",
+  },
+  tabActive: { backgroundColor: "#f57c00" },
+  tabText: { fontSize: 14, color: "#333" },
+  tabTextActive: { color: "#fff", fontWeight: "600" },
+  categoriesContainer: { height: 110, marginBottom: 10 },
+  categoriesList: { paddingHorizontal: 15 },
+  categoryCard: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    marginRight: 10,
+    alignItems: "center",
+    padding: 10,
+    width: 100,
+    height: 90,
+  },
+  categoryCardActive: {
+    backgroundColor: "#f6e9e1",
+    borderColor: "#f57c00",
+    borderWidth: 1,
+  },
+  categoryImage: {
+    width: 50,
+    height: 50,
+    resizeMode: "contain",
+    marginBottom: 6,
+  },
+  categoryName: { fontSize: 13, fontWeight: "600", textAlign: "center" },
+  productsContainer: { flex: 1, marginBottom: 80 },
+  productsList: { paddingHorizontal: 12 },
+  itemDetailContainer: { padding: 16 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 7,
+    marginHorizontal: 5,
+    padding: 10,
+  },
+  itemDetailCard: { width: "100%", marginBottom: 16 },
+  variationCard: { width: "100%", marginBottom: 16 },
+  itemCode: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "#f57c00",
+    color: "#fff",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    fontSize: 12,
+    borderRadius: 4,
+    zIndex: 1,
+  },
+  cardRow: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
+  image: {
+    width: 70,
+    height: 70,
+    resizeMode: "contain",
+    marginRight: 10,
+    marginTop: 20,
+  },
+  infoSection: { flex: 1, paddingTop: 20 },
+  itemName: { fontSize: 16, fontWeight: "500", color: "#333" },
+  itemPrice: { fontWeight: "700", color: "#000", marginTop: 4 },
+  qtyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f6f4f2",
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  qtyButton: {
+    backgroundColor: "#ccc",
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 30,
+  },
+  qtyButtonOrange: {
+    backgroundColor: "#f57c00",
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 30,
+  },
+  qtyIcon: { color: "#333", fontSize: 16, fontWeight: "700" },
+  qtyIconWhite: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  qtyText: { fontSize: 16, marginHorizontal: 8, fontWeight: "600" },
+  variationTitle: { fontSize: 16, fontWeight: "600", marginBottom: 10 },
+  variationOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  variationText: { fontSize: 15 },
+  addButton: {
+    backgroundColor: "#f57c00",
+    borderRadius: 10,
+    padding: 15,
+    alignItems: "center",
+  },
+  addButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  totalBar: {
+    position: "absolute",
+    bottom: 40,
+    left: 16,
+    right: 16,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 10,
+    padding: 16,
+    paddingVertical: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  totalLabel: { color: "#fff", fontSize: 18, fontWeight: "600" },
+  totalAmount: { color: "#fff", fontSize: 18, fontWeight: "700" },
+  loadingContainer: { justifyContent: "center", alignItems: "center" },
+  errorContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: { color: "red", marginBottom: 20, textAlign: "center" },
+  searchInput: { flex: 1, fontSize: 14, color: "#333", height: 20 },
 });

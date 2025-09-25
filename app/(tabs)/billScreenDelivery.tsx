@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router, useGlobalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router, useGlobalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,13 +9,13 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import QuickMenuModal from '@/components/QuickMenuModal';
+import QuickMenuModal from "@/components/QuickMenuModal";
 
-const API_URL = 'https://raiza.digieclipse.com/App_apiv2/app_api';
+const API_URL = "https://raiza.digieclipse.com/App_apiv2/app_api";
 
 export default function BillScreenDelivery() {
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
@@ -24,10 +24,16 @@ export default function BillScreenDelivery() {
 
   const orderStatus = Array.isArray(params.orderStatus)
     ? params.orderStatus[0]
-    : params.orderStatus ?? '';
+    : params.orderStatus ?? "";
 
   const [items, setItems] = useState<
-    { id: string; foodItemId?: string; name: string; qty: number; rate: number }[]
+    {
+      id: string;
+      foodItemId?: string;
+      name: string;
+      qty: number;
+      rate: number;
+    }[]
   >([]);
 
   const parseCartItems = (raw: unknown) => {
@@ -52,7 +58,7 @@ export default function BillScreenDelivery() {
         return JSON.parse(str);
       }
     } catch (e) {
-      console.warn('Failed to parse cartItems param:', e);
+      console.warn("Failed to parse cartItems param:", e);
       return [];
     }
   };
@@ -69,15 +75,10 @@ export default function BillScreenDelivery() {
     }));
 
     setItems(mapped);
-
-    // if (orderStatus === "dinein_active") {
-    //   getActiveOrder();
-    // }
   }, [params.cartItems, params.orderStatus]);
 
-
   const updateQty = (index: number, delta: number) => {
-    setItems(prev =>
+    setItems((prev) =>
       prev.map((it, i) =>
         i === index ? { ...it, qty: Math.max(1, it.qty + delta) } : it
       )
@@ -85,26 +86,26 @@ export default function BillScreenDelivery() {
   };
 
   const removeItem = (index: number) => {
-    setItems(prev => prev.filter((_, i) => i !== index));
+    setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const total = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
 
   const getActiveOrder = async () => {
     try {
-      const login_token = await AsyncStorage.getItem('login_token');
+      const login_token = await AsyncStorage.getItem("login_token");
       const tableId = params.tableId;
 
       if (!login_token || !tableId) {
-        Alert.alert('Missing info', 'Login token or table ID missing');
+        Alert.alert("Missing info", "Login token or table ID missing");
         return;
       }
 
       const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          function: 'get_active_order',
+          function: "get_active_order",
           data: {
             login_token,
             table_id: tableId,
@@ -115,8 +116,11 @@ export default function BillScreenDelivery() {
       const json = await response.json();
       console.log(json);
 
-      if (json.status !== 'success') {
-        Alert.alert('Fetch failed', json.message || 'Could not fetch active order.');
+      if (json.status !== "success") {
+        Alert.alert(
+          "Fetch failed",
+          json.message || "Could not fetch active order."
+        );
         return;
       }
 
@@ -131,11 +135,10 @@ export default function BillScreenDelivery() {
 
       setItems(mapped);
     } catch (e: any) {
-      console.error('getActiveOrder error:', e);
-      Alert.alert('Error', 'Could not load active order.');
+      console.error("getActiveOrder error:", e);
+      Alert.alert("Error", "Could not load active order.");
     }
   };
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -144,9 +147,9 @@ export default function BillScreenDelivery() {
         <TouchableOpacity
           onPress={() =>
             router.push({
-              pathname: '/table',
+              pathname: "/table",
               params: {
-                tableId: (params.tableId as string) || 'Unknown Table',
+                tableId: (params.tableId as string) || "Unknown Table",
               },
             })
           }
@@ -155,11 +158,10 @@ export default function BillScreenDelivery() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Main Billing</Text>
         <View style={styles.tableNumberText}>
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-            {params.tableId !== '-1' ? `T-${params.tableId}` : 'TA'}
+          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
+            DEL
           </Text>
         </View>
-        <Ionicons name="menu" size={24} color="#000" />
       </View>
 
       {/* Items table */}
@@ -176,7 +178,7 @@ export default function BillScreenDelivery() {
             <View key={item.id ?? index} style={styles.tableRow}>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>
-                  {(index + 1).toString().padStart(2, '0')} . {item.name}
+                  {(index + 1).toString().padStart(2, "0")} . {item.name}
                 </Text>
                 {!!item.foodItemId && (
                   <Text style={styles.itemCode}>{item.foodItemId}</Text>
@@ -188,7 +190,7 @@ export default function BillScreenDelivery() {
                   <Ionicons name="remove" size={18} color="#f57c00" />
                 </TouchableOpacity>
                 <Text style={styles.qtyText}>
-                  {item.qty.toString().padStart(2, '0')}
+                  {item.qty.toString().padStart(2, "0")}
                 </Text>
                 <TouchableOpacity onPress={() => updateQty(index, 1)}>
                   <Ionicons name="add" size={18} color="#f57c00" />
@@ -198,7 +200,10 @@ export default function BillScreenDelivery() {
               <Text style={styles.rateText}>{item.rate}</Text>
               <Text style={styles.totalText}>{item.qty * item.rate}</Text>
 
-              <TouchableOpacity onPress={() => removeItem(index)} style={{ marginLeft: 10, padding: 4 }}>
+              <TouchableOpacity
+                onPress={() => removeItem(index)}
+                style={{ marginLeft: 10, padding: 4 }}
+              >
                 <Ionicons name="trash" size={20} color="#f00" />
               </TouchableOpacity>
             </View>
@@ -228,11 +233,9 @@ export default function BillScreenDelivery() {
         {/* Button Rows */}
         <View style={styles.buttonRow}>
           <TouchableOpacity
-            style={[
-              styles.holdButton,
-            ]}
+            style={[styles.holdButton]}
             onPress={() => {
-              router.push('/delivery');
+              router.push("/delivery");
             }}
           >
             {saving ? (
@@ -244,71 +247,174 @@ export default function BillScreenDelivery() {
 
           {/* Pay Button */}
           <TouchableOpacity
-            style={[
-              styles.payButton,
-              saving && { opacity: 0.6 },
-            ]}
+            style={[styles.payButton, saving && { opacity: 0.6 }]}
             disabled={saving}
             onPress={() => {
               router.push({
-                pathname: '/payment',
+                pathname: "/payment",
                 params: {
-                  tableId: '-2',
+                  tableId: "-2",
                   total: total.toFixed(2),
-                  stewardId: '-2',
+                  stewardId: "-2",
                   cartItems: params.cartItems || JSON.stringify(items),
-                  orderStatus: "delivery_new"
+                  orderStatus: "delivery_new",
                 },
-              })
-            }
-            }
+              });
+            }}
           >
             <Text style={styles.payText}>Continue</Text>
           </TouchableOpacity>
         </View>
       </View>
-      <QuickMenuModal visible={quickMenuVisible} onClose={() => setQuickMenuVisible(false)} />
+      <QuickMenuModal
+        visible={quickMenuVisible}
+        onClose={() => setQuickMenuVisible(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f6f4f2' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', paddingTop: 30, paddingBottom: 16, paddingHorizontal: 20, },
-  headerTitle: { fontSize: 20, fontWeight: '600', color: '#222', right: 60 },
-  itemsContainer: { backgroundColor: '#fff', borderRadius: 12, paddingBottom: 8, flex: 1, },
-  tableHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ececec', borderTopLeftRadius: 12, borderTopRightRadius: 12, paddingHorizontal: 15, paddingVertical: 10, },
-  tableHeaderText: { fontWeight: '600', fontSize: 13, color: '#1c1c1c', },
-  tableHeaderQty: { fontWeight: '600', fontSize: 13, color: '#1c1c1c', right: 15, },
-  tableHeaderTotal: { fontWeight: '600', fontSize: 13, left: 15, color: '#1c1c1c', },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomColor: '#eee', borderBottomWidth: 1, },
-  itemInfo: { width: '25%' },
-  itemName: { fontSize: 13, color: '#222' },
-  itemCode: { fontSize: 12, color: '#f57c00' },
-  qtyControls: { width: '25%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', },
-  qtyText: { marginHorizontal: 8, fontWeight: '600', color: '#f57c00', },
-  rateText: { width: '25%', textAlign: 'center', color: '#333', },
-  totalText: { width: '25%', textAlign: 'center', fontWeight: '700', color: '#333', },
-  summaryBox: { backgroundColor: '#fff', paddingHorizontal: 30, paddingVertical: 16, },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4, },
-  label: { fontSize: 14, color: '#333' },
-  amount: { fontSize: 14, color: '#333' },
-  grandLabel: { fontSize: 16, fontWeight: '700', color: '#1c1c1c', },
-  grandTotal: { fontSize: 16, fontWeight: '700', color: '#1c1c1c', },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, },
-  holdButton: { flex: 1, backgroundColor: '#1c1c1c', borderRadius: 8, alignItems: 'center', paddingVertical: 12, marginRight: 10, },
-  holdText: { fontWeight: '600', fontSize: 16, color: '#fff' },
-  payButton: { flex: 1, backgroundColor: '#f57c00', borderRadius: 8, alignItems: 'center', paddingVertical: 12, },
-  payText: { fontWeight: '600', fontSize: 16, color: '#fff' },
-  payButton2: { backgroundColor: '#f57c00', borderRadius: 8, alignItems: 'center', paddingVertical: 12, marginTop: 10, width: '100%', },
-  payText2: { fontWeight: '800', fontSize: 16, color: '#fff' },
-  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#ddd', },
-  navItemContainer: { alignItems: 'center' },
-  navText: { fontSize: 12, color: '#888', marginTop: 4 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.32)', },
-  quickMenuModal: { backgroundColor: '#fff', paddingVertical: 20, paddingHorizontal: 10, borderTopLeftRadius: 20, borderTopRightRadius: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', },
-  menuIconBox: { width: '30%', alignItems: 'center', marginVertical: 15, },
-  menuLabel: { marginTop: 6, fontSize: 13, color: '#333', textAlign: 'center', },
-  tableNumberText: { backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 0, alignSelf: 'center', right: 100 },
-  deleteIcon: { marginLeft: 10, padding: 4, }
+  container: { flex: 1, backgroundColor: "#f6f4f2" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingTop: 30,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+  },
+  headerTitle: { fontSize: 20, fontWeight: "600", color: "#222", right: 80 },
+  itemsContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingBottom: 8,
+    flex: 1,
+  },
+  tableHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ececec",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+  tableHeaderText: { fontWeight: "600", fontSize: 13, color: "#1c1c1c" },
+  tableHeaderQty: {
+    fontWeight: "600",
+    fontSize: 13,
+    color: "#1c1c1c",
+    right: 15,
+  },
+  tableHeaderTotal: {
+    fontWeight: "600",
+    fontSize: 13,
+    left: 15,
+    color: "#1c1c1c",
+  },
+  tableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomColor: "#eee",
+    borderBottomWidth: 1,
+  },
+  itemInfo: { width: "25%" },
+  itemName: { fontSize: 13, color: "#222" },
+  itemCode: { fontSize: 12, color: "#f57c00" },
+  qtyControls: {
+    width: "25%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qtyText: { marginHorizontal: 8, fontWeight: "600", color: "#f57c00" },
+  rateText: { width: "25%", textAlign: "center", color: "#333" },
+  totalText: {
+    width: "25%",
+    textAlign: "center",
+    fontWeight: "700",
+    color: "#333",
+  },
+  summaryBox: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 30,
+    paddingVertical: 16,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginVertical: 4,
+  },
+  label: { fontSize: 14, color: "#333" },
+  amount: { fontSize: 14, color: "#333" },
+  grandLabel: { fontSize: 16, fontWeight: "700", color: "#1c1c1c" },
+  grandTotal: { fontSize: 16, fontWeight: "700", color: "#1c1c1c" },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  holdButton: {
+    flex: 1,
+    backgroundColor: "#1c1c1c",
+    borderRadius: 8,
+    alignItems: "center",
+    paddingVertical: 12,
+    marginRight: 10,
+  },
+  holdText: { fontWeight: "600", fontSize: 16, color: "#fff" },
+  payButton: {
+    flex: 1,
+    backgroundColor: "#f57c00",
+    borderRadius: 8,
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  payText: { fontWeight: "600", fontSize: 16, color: "#fff" },
+  payButton2: {
+    backgroundColor: "#f57c00",
+    borderRadius: 8,
+    alignItems: "center",
+    paddingVertical: 12,
+    marginTop: 10,
+    width: "100%",
+  },
+  payText2: { fontWeight: "800", fontSize: 16, color: "#fff" },
+  bottomNav: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#ddd",
+  },
+  navItemContainer: { alignItems: "center" },
+  navText: { fontSize: 12, color: "#888", marginTop: 4 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.32)" },
+  quickMenuModal: {
+    backgroundColor: "#fff",
+    paddingVertical: 20,
+    paddingHorizontal: 10,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-around",
+  },
+  menuIconBox: { width: "30%", alignItems: "center", marginVertical: 15 },
+  menuLabel: { marginTop: 6, fontSize: 13, color: "#333", textAlign: "center" },
+  tableNumberText: {
+    backgroundColor: "#000",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginLeft: 0,
+    alignSelf: "center",
+    right: 150,
+  },
+  deleteIcon: { marginLeft: 10, padding: 4 },
 });
