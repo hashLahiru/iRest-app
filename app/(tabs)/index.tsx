@@ -1,75 +1,112 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useEffect } from "react";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+export default function SplashScreen() {
+  const router = useRouter();
 
-export default function HomeScreen() {
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem("login_token");
+        const last_workday = await AsyncStorage.getItem("last_workday");
+
+        if (!token) {
+          return router.push("/login");
+        }
+
+        const response = await fetch(
+          "https://raiza.digieclipse.com/App_apiv2/app_api",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              function: "check_login_status",
+              data: { login_token: token },
+            }),
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+          if (
+            last_workday &&
+            new Date(last_workday).toISOString().slice(0, 10) ===
+              new Date().toISOString().slice(0, 10)
+          ) {
+            return router.replace("/table");
+          }
+          router.replace("/home");
+        } else {
+          router.push("/login");
+        }
+      } catch (err) {
+        router.replace("/login");
+      }
+    };
+
+    checkLoginStatus();
+  }, []);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
+    <LinearGradient
+      colors={["#1c1c1c", "#f57c00"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <View style={styles.centerContent}>
         <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+          source={require("../../assets/images/logo.png")}
+          style={styles.logo}
+          resizeMode="contain"
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <ActivityIndicator
+          size="large"
+          color="#fff"
+          style={{ marginTop: 24 }}
+        />
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.powered}>Powered by introps</Text>
+        <Text style={styles.credit}>Designed by Sunera AP Siriwardhana</Text>
+      </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  centerContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  logo: {
+    width: 200,
+    height: 200,
+    marginBottom: 50,
+  },
+  footer: {
+    alignItems: "center",
+    paddingBottom: 30,
+  },
+  powered: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  credit: {
+    fontSize: 10,
+    color: "#ddd",
+    marginTop: 6,
   },
 });

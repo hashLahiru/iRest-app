@@ -1,0 +1,35 @@
+# Dependencies - EAS installs these itself from your package.json
+node_modules/
+**/node_modules/
+android/
+
+# Build artifacts from local development
+.expo/
+dist/
+web-build/
+
+# Runtime data and cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tgz
+*.tar.gz
+
+# OS and IDE generated files
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+
+# Optional: Exclude assets if you use remote, optimized assets with `expo-asset`
+# assets/**
+
+# Optional: Exclude specific non-essential directories
+docs/
+__tests__/
+coverage/

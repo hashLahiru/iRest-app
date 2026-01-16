@@ -1,0 +1,56 @@
+diff --git a/node_modules/react-native-bluetooth-serial-next/android/build.gradle b/node_modules/react-native-bluetooth-serial-next/android/build.gradle
+index cd10efd..08a372a 100644
+--- a/node_modules/react-native-bluetooth-serial-next/android/build.gradle
++++ b/node_modules/react-native-bluetooth-serial-next/android/build.gradle
+@@ -1,35 +1,44 @@
+ buildscript {
+     repositories {
+         google()
+-        jcenter()
++        mavenCentral()
+     }
+ 
+     dependencies {
+-        classpath 'com.android.tools.build:gradle:3.2.0'
++        classpath 'com.android.tools.build:gradle:8.1.1'
+     }
+ }
+ 
+ apply plugin: 'com.android.library'
+ 
+ android {
+-    compileSdkVersion 27
++    compileSdkVersion 35
+ 
+     defaultConfig {
+-        minSdkVersion 16
+-        targetSdkVersion 27
++        minSdkVersion 24
++        targetSdkVersion 35
+         versionCode 1
+         versionName "1.0"
++
+         ndk {
+             abiFilters "armeabi-v7a", "x86"
+         }
+     }
++
++    compileOptions {
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
++    }
++
++    kotlinOptions {
++        jvmTarget = "17"
++    }
+ }
+ 
+ repositories {
+-    jcenter()
+     google()
++    mavenCentral()
+     maven {
+-        // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
+         url "$rootDir/../node_modules/react-native/android"
+     }
+ }
